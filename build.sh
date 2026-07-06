@@ -349,11 +349,35 @@ build_init() {
     local out="$BUILD_DIR/init-$ARCH"
     mkdir -p "$out"
 
-    ( cd "$init_src" && \
-        make clean && \
-        make CC="${cross}gcc" CXX="${cross}g++" \
-             STRIP="${cross}strip" \
-             -j"$JOBS" OUT="$out" ) || die "init build failed"
+        # Compile directly with gcc — bypasses the Makefile (avoids tab/space issues in web editor)
+    local cc="${cross:-gcc}gcc"
+    local strip_bin="${cross:-strip}strip"
+    log "Compiling zaios-init"
+    $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
+        -o "$out/zaios-init" \
+        "$init_src/zaios-init.c" "$init_src/zaios-mounts.c" "$init_src/zaios-services.c" \
+        -ludev -lrt || die "zaios-init compile failed"
+    $strip_bin "$out/zaios-init" 2>/dev/null || true
+
+    log "Compiling zaios-input"
+    $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
+        -o "$out/zaios-input" "$init_src/zaios-input-svc.c" -ludev -lrt || die "zaios-input compile failed"
+    $strip_bin "$out/zaios-input" 2>/dev/null || true
+
+    log "Compiling zaios-cast"
+    $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
+        -o "$out/zaios-cast" "$init_src/zaios-cast-svc.c" -lrt || die "zaios-cast compile failed"
+    $strip_bin "$out/zaios-cast" 2>/dev/null || true
+
+    log "Compiling zaios-spotify"
+    $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
+        -o "$out/zaios-spotify" "$init_src/zaios-spotify-svc.c" -lrt || die "zaios-spotify compile failed"
+    $strip_bin "$out/zaios-spotify" 2>/dev/null || true
+
+    log "Compiling zaios-network"
+    $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
+        -o "$out/zaios-network" "$init_src/zaios-network-svc.c" -lrt || die "zaios-network compile failed"
+    $strip_bin "$out/zaios-network" 2>/dev/null || true
 
     ok "init + services built to $out"
 
