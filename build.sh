@@ -350,8 +350,8 @@ build_init() {
     mkdir -p "$out"
 
         # Compile directly with gcc — bypasses the Makefile (avoids tab/space issues in web editor)
-    local cc="${cross:-gcc}gcc"
-    local strip_bin="${cross:-strip}strip"
+    local cc="${cross}gcc"
+    local strip_bin="${cross}strip"
     log "Compiling zaios-init"
     $cc -O2 -Wall -Wextra -Wno-unused-parameter -std=c11 -static \
         -o "$out/zaios-init" \
