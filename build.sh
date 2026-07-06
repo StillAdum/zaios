@@ -198,7 +198,7 @@ download_sources() {
         ["qt-everywhere-src-$QT_VERSION.tar.xz"]="https://download.qt.io/archive/qt/$(echo $QT_VERSION | cut -d. -f1-2)/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
         ["glibc-$GLIBC_VERSION.tar.xz"]="https://ftp.gnu.org/gnu/glibc/glibc-$GLIBC_VERSION.tar.xz"
         ["busybox-$BUSYBOX_VERSION.tar.bz2"]="https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
-        ["mpv-$MPV_VERSION.tar.xz"]="https://github.com/mpv-player/mpv/releases/download/v$MPV_VERSION/mpv-$MPV_VERSION.tar.xz"
+        ["mpv-$MPV_VERSION.tar.gz"]="https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz"
         ["yt-dlp-$YT_DLP_VERSION.tar.gz"]="https://github.com/yt-dlp/yt-dlp/archive/refs/tags/$YT_DLP_VERSION.tar.gz"
         ["wpa_supplicant-$WPA_SUPPLICANT_VERSION.tar.gz"]="https://w1.fi/releases/wpa_supplicant-$WPA_SUPPLICANT_VERSION.tar.gz"
         ["bluez-$BLUEZ_VERSION.tar.xz"]="https://www.kernel.org/pub/linux/bluetooth/bluez-$BLUEZ_VERSION.tar.xz"
