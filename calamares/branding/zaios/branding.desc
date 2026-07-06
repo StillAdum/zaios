@@ -1,0 +1,34 @@
+# ZAIos branding for Calamares
+---
+componentName: zaios
+
+# Strings
+strings:
+    productName:         "ZAIos"
+    shortProductName:    "ZAIos"
+    version:             "1.0"
+    shortVersion:        "1.0"
+    codename:            "Aurora"
+    productUrl:          "https://github.com/zaios/zaios"
+    supportUrl:          "https://github.com/zaios/zaios/issues"
+    knownIssuesUrl:      "https://github.com/zaios/zaios/issues"
+    releaseNotesUrl:     "https://github.com/zaios/zaios/releases"
+
+# Images
+images:
+    productLogo:        "logo.svg"
+    productIcon:        "logo.svg"
+    productWelcome:     "welcome.svg"
+
+# Style — dark glassmorphism
+style:
+    SidebarBackground:    "#0A0F2C"
+    SidebarText:          "#B0BBD8"
+    SidebarTextSelect:    "#00E5FF"
+    SidebarTextHighlight: "#1A2151"
+    WindowBackground:     "#0A0F2C"
+    WindowBackgroundDark: "#050816"
+
+# Slideshow images (shown during install)
+slideshow:               "show.qml"
+slideshowAPI:            1

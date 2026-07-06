@@ -1,0 +1,4 @@
+# Module descriptor for zaios-finalize
+type: python
+interface: python
+name: zaios-finalize

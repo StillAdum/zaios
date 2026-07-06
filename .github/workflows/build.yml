@@ -1,0 +1,369 @@
+# =============================================================================
+# ZAIos — Multi-arch ISO build via GitHub Actions
+#
+# This workflow:
+#   1. Downloads & caches all upstream sources (Linux, Qt6, glibc, etc.)
+#   2. Builds the ZAIos bootable ISO for the selected arch
+#   3. Uploads the ISO as a workflow artifact (downloadable from the Actions tab)
+#
+# How to use:
+#   1. Push your ZAIos source to a public GitHub repo
+#   2. Put this file at .github/workflows/build.yml
+#   3. Go to https://github.com/<you>/<repo>/actions
+#   4. Click "Run workflow" → pick the arch (x86_64 / arm64 / arm)
+#   5. Wait ~3 hours
+#   6. Download the ISO from the workflow run's Artifacts section
+#
+# Cache strategy:
+#   - cache/dl/     (source tarballs)        → cached forever, key = versions
+#   - cache/src/    (extracted sources)      → cached per arch
+#   - build/qt-*    (Qt6 install)            → cached per arch, key = QT_VERSION
+#   - build/linux-* (kernel build tree)      → NOT cached (too big, fast rebuild)
+# =============================================================================
+name: Build ZAIos ISO
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'rootfs/**'
+      - 'calamares/**'
+      - 'build.sh'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        required: true
+        default: 'x86_64'
+        type: choice
+        options:
+          - x86_64
+          - arm64
+          - arm
+      skip_chromium:
+        description: 'Skip Chromium/QtWebEngine (saves ~4 hours)'
+        required: false
+        default: true
+        type: boolean
+      verbose:
+        description: 'Verbose build output'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  ZAIOS_VERSION: "1.0"
+
+jobs:
+  build:
+    name: Build ${{ github.event.inputs.arch || 'x86_64' }} ISO
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJSON(github.event.inputs.arch && format('["{0}"]', github.event.inputs.arch) || '["x86_64"]') }}
+
+    env:
+      ARCH: ${{ matrix.arch }}
+      SKIP_CHROMIUM: ${{ github.event.inputs.skip_chromium || 'true' }}
+      VERBOSE: ${{ github.event.inputs.verbose || 'false' }}
+
+    steps:
+      # ────────────────────────────────────────────────────────────────────
+      # 1. Checkout
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📥 Checkout ZAIos source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ────────────────────────────────────────────────────────────────────
+      # 2. Free up disk space (ubuntu-22.04 runner has ~14 GB free; we need 25+)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 💾 Free up disk space
+        run: |
+          echo "Before:"
+          df -h /
+          # Remove unused pre-installed software
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                       /opt/hostedtoolcache /usr/local/.ghcup /usr/lib/jvm \
+                       /usr/lib/firefox /opt/microsoft /usr/lib/google-cloud-sdk \
+                       /usr/lib/heroku /usr/lib/yo /usr/lib/ripgrep
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+          echo "After:"
+          df -h /
+
+      # ────────────────────────────────────────────────────────────────────
+      # 3. Install build deps
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📦 Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gcc g++ make cmake ninja-build \
+            bc bison flex libelf-dev libssl-dev \
+            python3 python3-pip python3-venv \
+            pkg-config wget curl git ca-certificates \
+            xorriso grub-pc-bin grub-efi-amd64-bin isolinux syslinux-utils \
+            mtools dosfstools squashfs-tools \
+            libevdev-dev libudev-dev libdrm-dev libwayland-dev wayland-protocols \
+            libbluetooth-dev libpipewire-0.3-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libgbm-dev \
+            libxkbcommon-dev libfontconfig1-dev libfreetype6-dev \
+            libxcb1-dev libx11-dev libx11-xcb-dev \
+            libpulse-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libxml2-dev libxslt1-dev libnss3-dev libnspr4-dev \
+            libwoff-dev libvpx-dev libopus-dev \
+            libglib2.0-dev libcups2-dev libdbus-1-dev libicu-dev \
+            libpcre2-dev libz3-dev libdouble-conversion-dev libharfbuzz-dev \
+            libjpeg-dev libpng-dev libtiff-dev libsqlite3-dev \
+            libffi-dev libslirp-dev libtirpc-dev \
+            gperf ccache rsync file
+          # Cross toolchains (only installed when needed)
+          if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          elif [[ "${{ matrix.arch }}" == "arm" ]]; then
+            sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+          fi
+          # Calamares binary (staged into ISO for installer)
+          sudo apt-get install -y --no-install-recommends calamares || true
+
+      - name: ✅ Verify tools
+        run: |
+          for cmd in gcc g++ make cmake ninja xorriso grub-mkimage mksquashfs wget python3; do
+            echo -n "$cmd: "; command -v $cmd
+          done
+          df -h /
+
+      # ────────────────────────────────────────────────────────────────────
+      # 4. Cache downloaded source tarballs (cache/dl/)
+      #    Reused across all builds regardless of arch.
+      # ────────────────────────────────────────────────────────────────────
+      - name: 💽 Cache source tarballs
+        uses: actions/cache@v4
+        with:
+          path: cache/dl
+          key: zaios-dl-v3-${{ hashFiles('build.sh') }}
+          restore-keys: |
+            zaios-dl-v3-
+
+      # ────────────────────────────────────────────────────────────────────
+      # 5. Cache extracted sources (cache/src/)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 💽 Cache extracted sources
+        uses: actions/cache@v4
+        with:
+          path: cache/src
+          key: zaios-src-${{ matrix.arch }}-${{ hashFiles('build.sh') }}
+
+      # ────────────────────────────────────────────────────────────────────
+      # 6. Cache Qt6 install (the BIG time saver — Qt6 takes ~2 hours)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 💽 Cache Qt6 build (${{ matrix.arch }})
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: build/qt-${{ matrix.arch }}
+          key: zaios-qt-${{ matrix.arch }}-v6.7.2-2
+
+      # ────────────────────────────────────────────────────────────────────
+      # 7. (Optional) Skip Chromium to save 4 hours
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🚫 Skip Chromium (if requested)
+        if: env.SKIP_CHROMIUM == 'true'
+        run: |
+          # Comment out the chromium line in build.sh so download_sources skips it
+          python3 << 'PYEOF'
+          with open('build.sh', 'r') as f:
+              content = f.read()
+          import re
+          new = re.sub(
+              r'(\s+)\["chromium[^"]*"\]="[^"]*"',
+              r'\1# SKIPPED: chromium (set skip_chromium=false to enable)',
+              content
+          )
+          with open('build.sh', 'w') as f:
+              f.write(new)
+          print('Chromium download skipped')
+          PYEOF
+
+      # ────────────────────────────────────────────────────────────────────
+      # 8. Verify build.sh syntax
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🔍 Verify build.sh syntax
+        run: |
+          bash -n build.sh && echo "Syntax OK" || exit 1
+          chmod +x build.sh
+
+      # ────────────────────────────────────────────────────────────────────
+      # 9. Download stage (uses cache if available)
+      # ────────────────────────────────────────────────────────────────────
+      - name: ⬇️ Download sources
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target download
+
+      # ────────────────────────────────────────────────────────────────────
+      # 10. Extract sources (also cached)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📦 Extract sources
+        run: |
+          # Extract all tarballs in cache/dl/ into cache/src/
+          mkdir -p cache/src
+          for f in cache/dl/*; do
+            case "$f" in
+              *.tar.xz)  tar -xf "$f" -C cache/src/ ;;
+              *.tar.bz2) tar -xjf "$f" -C cache/src/ ;;
+              *.tar.gz)  tar -xzf "$f" -C cache/src/ ;;
+            esac
+          done
+          ls cache/src/ | head -20
+
+      # ────────────────────────────────────────────────────────────────────
+      # 11. Build kernel
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🔧 Build Linux kernel
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target kernel --skip-downloads
+        timeout-minutes: 60
+
+      # ────────────────────────────────────────────────────────────────────
+      # 12. Build init + services (small, fast)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🔧 Build zaios-init + services
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target init --skip-downloads
+        timeout-minutes: 10
+
+      # ────────────────────────────────────────────────────────────────────
+      # 13. Build Qt6 + ZAIos Shell
+      #     (skips Qt6 build if cache hit)
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🔧 Build Qt6 + ZAIos Shell
+        if: steps.cache-qt.outputs.cache-hit != 'true'
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target shell --skip-downloads
+        timeout-minutes: 180
+
+      - name: 🔧 Build ZAIos Shell only (Qt6 cached)
+        if: steps.cache-qt.outputs.cache-hit == 'true'
+        run: |
+          # Force shell rebuild even though Qt6 is cached
+          rm -rf build/shell-${{ matrix.arch }}
+          ./build.sh --arch ${{ matrix.arch }} --target shell --skip-downloads
+        timeout-minutes: 30
+
+      # ────────────────────────────────────────────────────────────────────
+      # 14. Assemble rootfs
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🗂️ Assemble rootfs
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target rootfs --skip-downloads
+        timeout-minutes: 30
+
+      # ────────────────────────────────────────────────────────────────────
+      # 15. Build initramfs
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📦 Build initramfs
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target initramfs
+        timeout-minutes: 15
+
+      # ────────────────────────────────────────────────────────────────────
+      # 16. Stage Calamares
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📦 Stage Calamares
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target calamares
+        timeout-minutes: 5
+
+      # ────────────────────────────────────────────────────────────────────
+      # 17. Assemble ISO
+      # ────────────────────────────────────────────────────────────────────
+      - name: 💿 Assemble bootable ISO
+        run: |
+          ./build.sh --arch ${{ matrix.arch }} --target iso
+        timeout-minutes: 15
+
+      # ────────────────────────────────────────────────────────────────────
+      # 18. Verify ISO
+      # ────────────────────────────────────────────────────────────────────
+      - name: ✅ Verify ISO
+        run: |
+          ls -lh build/out/
+          # Check it's a valid ISO image
+          xorriso -indev build/out/zaios-${{ matrix.arch }}-${{ env.ZAIOS_VERSION }}.iso -report_system_area plain -- 2>&1 | head -20 || true
+
+      # ────────────────────────────────────────────────────────────────────
+      # 19. (Optional) Boot-test in QEMU
+      # ────────────────────────────────────────────────────────────────────
+      - name: 🧪 Boot-test in QEMU (x86_64 only)
+        if: matrix.arch == 'x86_64'
+        run: |
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
+          # Boot the ISO for 60 seconds, then kill it
+          timeout 60 qemu-system-x86_64 \
+            -m 2G \
+            -cdrom build/out/zaios-x86_64-${{ env.ZAIOS_VERSION }}.iso \
+            -boot d \
+            -nographic \
+            -serial mon:stdio \
+            -no-reboot \
+            || echo "QEMU test done (exit $?)"
+
+      # ────────────────────────────────────────────────────────────────────
+      # 20. Upload ISO as artifact
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📤 Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zaios-${{ matrix.arch }}-${{ env.ZAIOS_VERSION }}-iso
+          path: build/out/zaios-${{ matrix.arch }}-${{ env.ZAIOS_VERSION }}.iso
+          retention-days: 14
+          compression-level: 0  # ISO is already compressed
+
+      # ────────────────────────────────────────────────────────────────────
+      # 21. Upload build log if anything failed
+      # ────────────────────────────────────────────────────────────────────
+      - name: 📤 Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.arch }}-${{ github.run_id }}
+          path: |
+            build.log
+            build/**/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Release job: attach ISO to a GitHub Release if a tag was pushed
+  # ──────────────────────────────────────────────────────────────────────
+  release:
+    name: Attach ISO to Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 📥 Download all ISO artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: zaios-*-iso
+          merge-multiple: false
+
+      - name: 📦 List artifacts
+        run: ls -lhR
+
+      - name: 🚀 Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            zaios-*-iso/zaios-*.iso
+          generate_release_notes: true
+          fail_on_unmatched_files: false

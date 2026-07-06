@@ -1,0 +1,35 @@
+# ZAIos udev rules — give zaios user access to input, GPU, audio devices
+
+# Input devices (keyboard, mouse, remote)
+KERNEL=="event*",       MODE="0660", GROUP="input"
+KERNEL=="input/event*", MODE="0660", GROUP="input"
+KERNEL=="js*",          MODE="0660", GROUP="input"
+
+# GPU / DRM
+KERNEL=="card0",        MODE="0660", GROUP="video"
+KERNEL=="dri/*",        MODE="0660", GROUP="video"
+KERNEL=="dri/renderD*", MODE="0660", GROUP="render"
+
+# Audio
+KERNEL=="snd/*",        MODE="0660", GROUP="audio"
+KERNEL=="ttyS*",        MODE="0660", GROUP="audio"
+
+# Bluetooth
+KERNEL=="hci*",         MODE="0660", GROUP="bluetooth"
+KERNEL=="rfkill",       MODE="0660", GROUP="bluetooth"
+
+# Network
+SUBSYSTEM=="net",       GROUP="netdev"
+
+# USB serial (for some remotes)
+KERNEL=="ttyUSB*",      MODE="0660", GROUP="zaios"
+
+# Power supply
+SUBSYSTEM=="power_supply", MODE="0664", GROUP="zaios"
+
+# Auto-mount USB storage
+SUBSYSTEM=="block", ACTION=="add", ENV{ID_FS_USAGE}=="filesystem", \
+    RUN+="/bin/mkdir -p /mnt/usb", \
+    RUN+="/bin/mount $env{DEVNAME} /mnt/usb"
+SUBSYSTEM=="block", ACTION=="remove", \
+    RUN+="/bin/umount /mnt/usb 2>/dev/null"
