@@ -118,7 +118,7 @@ jobs:
             libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libgbm-dev \
             libxkbcommon-dev libfontconfig1-dev libfreetype6-dev \
             libxcb1-dev libx11-dev libx11-xcb-dev \
-            libpulse-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libunwind-dev \
+            libpulse-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libunwind-dev libclang-14-dev \
             libxml2-dev libxslt1-dev libnss3-dev libnspr4-dev \
             libwoff-dev libvpx-dev libopus-dev \
             libglib2.0-dev libcups2-dev libdbus-1-dev libicu-dev \
