@@ -424,7 +424,7 @@ build_shell() {
             -opensource -confirm-license \
             ${cross:+-device-option CROSS_COMPILE=$cross} \
             -nomake examples -nomake tests \
-            -skip qtwebengine -skip qtactiveqt \
+            -skip qtwebengine -skip qtactiveqt -skip qttools \
             -system-zlib -system-libjpeg -system-libpng \
             -dbus -gui -widgets \
             -no-feature-sqlmodel \
