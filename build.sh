@@ -282,40 +282,46 @@ build_kernel() {
     local ksrc="$SRC_DIR/linux-$LINUX_VERSION"
     local kbuild="$BUILD_DIR/linux-build-$ARCH"
     local kcfg="$ZAIOS_ROOT/src/kernel/configs/zaios_$ARCH.config"
+    local kimg="$kbuild/arch/$(kernel_arch)/boot/bzImage"
 
     [[ ! -d "$ksrc" ]] && die "Kernel source missing at $ksrc"
     [[ ! -f "$kcfg" ]] && die "Kernel config missing at $kcfg"
 
-    mkdir -p "$kbuild"
+    # SKIP if kernel already built (resumable)
+    if [[ -f "$kimg" ]] && [[ -d "$BUILD_DIR/modules-$ARCH/lib/modules" ]]; then
+        ok "Kernel already built at $kimg (skipping)"
+    else
+        mkdir -p "$kbuild"
 
-    # Concatenate common + arch-specific config
-    local common_cfg="$ZAIOS_ROOT/src/kernel/configs/zaios_common.config"
-    cat "$common_cfg" "$kcfg" > "$kbuild/.config"
+        # Concatenate common + arch-specific config
+        local common_cfg="$ZAIOS_ROOT/src/kernel/configs/zaios_common.config"
+        cat "$common_cfg" "$kcfg" > "$kbuild/.config"
 
-    local cross="$(cross_tuple)"
-    local arch="$(kernel_arch)"
+        local cross="$(cross_tuple)"
+        local arch="$(kernel_arch)"
 
-    # Configure
-    log "Configuring kernel (arch=$arch, cross=$cross)"
-    ( cd "$ksrc" && \
-        make O="$kbuild" ARCH="$arch" \
-        ${cross:+CROSS_COMPILE=$cross} \
-        olddefconfig )
+        # Configure
+        log "Configuring kernel (arch=$arch, cross=${cross:-native})"
+        ( cd "$ksrc" && \
+            make O="$kbuild" ARCH="$arch" \
+            ${cross:+CROSS_COMPILE=$cross} \
+            olddefconfig )
 
-    # Build
-    log "Building kernel + modules (${JOBS} jobs)"
-    ( cd "$ksrc" && \
-        make O="$kbuild" ARCH="$arch" \
-        ${cross:+CROSS_COMPILE=$cross} \
-        -j"$JOBS" bzImage modules ) || die "Kernel build failed"
+        # Build
+        log "Building kernel + modules (${JOBS} jobs)"
+        ( cd "$ksrc" && \
+            make O="$kbuild" ARCH="$arch" \
+            ${cross:+CROSS_COMPILE=$cross} \
+            -j"$JOBS" bzImage modules ) || die "Kernel build failed"
 
-    # Install modules into a temp staging dir
-    local moddir="$BUILD_DIR/modules-$ARCH"
-    rm -rf "$moddir"; mkdir -p "$moddir"
-    ( cd "$ksrc" && \
-        make O="$kbuild" ARCH="$arch" \
-        ${cross:+CROSS_COMPILE=$cross} \
-        INSTALL_MOD_PATH="$moddir" modules_install )
+        # Install modules into a temp staging dir
+        local moddir="$BUILD_DIR/modules-$ARCH"
+        rm -rf "$moddir"; mkdir -p "$moddir"
+        ( cd "$ksrc" && \
+            make O="$kbuild" ARCH="$arch" \
+            ${cross:+CROSS_COMPILE=$cross} \
+            INSTALL_MOD_PATH="$moddir" modules_install )
+    fi
 
     ok "Kernel built:"
     ok "  Image:   $kbuild/arch/$arch/boot/bzImage"
@@ -416,8 +422,6 @@ build_shell() {
     if [[ ! -f "$qt_prefix/lib/libQt6Core.so" ]] && [[ ! -f "$qt_prefix/lib/libQt6Core.a" ]]; then
         log "Building Qt6 base (this takes ~2 hours on 4 cores)"
         local qtsrc="$SRC_DIR/qt-everywhere-src-$QT_VERSION"
-        local qtbuild="$BUILD_DIR/qt-build-$ARCH"
-        mkdir -p "$qtbuild"
         ( cd "$qtsrc" && ./configure \
             -prefix "$qt_prefix" \
             -release \
@@ -428,34 +432,13 @@ build_shell() {
             -system-zlib -system-libjpeg -system-libpng \
             -dbus -gui -widgets \
             -no-feature-sqlmodel \
-            -optimized-qmake \
             -no-warnings-are-errors \
             2>&1 | tail -50 ) || die "Qt6 configure failed"
         ( cd "$qtsrc" && cmake --build . -j"$JOBS" 2>&1 | tail -50 ) || die "Qt6 build failed"
         ( cd "$qtsrc" && cmake --install . 2>&1 | tail -20 ) || die "Qt6 install failed"
         ok "Qt6 installed to $qt_prefix"
     else
-        ok "Qt6 already built at $qt_prefix"
-    fi
-
-    # Build QtWebEngine (Chromium) — separate step because it's huge
-    if [[ ! -d "$qt_prefix/lib/QtWebEngineCore.framework" ]] && \
-       [[ ! -f "$qt_prefix/lib/libQt6WebEngineCore.so" ]]; then
-        warn "QtWebEngine not built — building it now (this takes 4+ hours)"
-        local qtsrc="$SRC_DIR/qt-everywhere-src-$QT_VERSION"
-        ( cd "$qtsrc" && \
-            ./configure -prefix "$qt_prefix" \
-            -release -opensource -confirm-license \
-            -skip qtactiveqt \
-            -nomake examples -nomake tests \
-            ${cross:+-device-option CROSS_COMPILE=$cross} \
-            -no-warnings-are-errors \
-            -module qtwebengine \
-            2>&1 | tail -20 ) || die "QtWebEngine configure failed"
-        ( cd "$qtsrc" && cmake --build . --target qtwebengine -j"$JOBS" 2>&1 | tail -30 ) \
-            || die "QtWebEngine build failed"
-        ( cd "$qtsrc" && cmake --install . 2>&1 | tail -10 ) || die "QtWebEngine install failed"
-        ok "QtWebEngine installed"
+        ok "Qt6 already built at $qt_prefix (skipping)"
     fi
 
     # Build ZAIos Shell itself
@@ -617,6 +600,14 @@ EOF
 build_initramfs() {
     section "Building initramfs for $ARCH"
 
+    local out="$BUILD_DIR/initramfs-$ARCH.img"
+
+    # SKIP if already built (resumable)
+    if [[ -f "$out" ]] && [[ -s "$out" ]]; then
+        ok "Initramfs already built at $out (skipping)"
+        return 0
+    fi
+
     local irfs="$BUILD_DIR/initramfs-$ARCH"
     rm -rf "$irfs"; mkdir -p "$irfs"/{bin,sbin,proc,sys,dev,run,newroot,usr/{bin,sbin}}
 
@@ -715,6 +706,13 @@ build_iso() {
     local kimg="$ROOTFS_DIR/boot/vmlinuz-$ZAIOS_VERSION-$ARCH"
     local irfs="$BUILD_DIR/initramfs-$ARCH.img"
     local iso_out="$OUT_DIR/zaios-$ARCH-$ZAIOS_VERSION.iso"
+
+    # SKIP if already built (resumable)
+    if [[ -f "$iso_out" ]] && [[ -s "$iso_out" ]]; then
+        ok "ISO already built at $iso_out (skipping)"
+        ok "Flash to USB:  dd if=$iso_out of=/dev/sdX bs=4M status=progress && sync"
+        return 0
+    fi
 
     [[ ! -f "$sqfs" ]] && die "rootfs squashfs missing: $sqfs"
     [[ ! -f "$kimg" ]] && die "kernel image missing: $kimg"
