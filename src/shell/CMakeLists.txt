@@ -28,6 +28,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # ── Find Qt6 ─────────────────────────────────────────────────────────────────
+# Required Qt6 modules
 find_package(Qt6 6.5 REQUIRED COMPONENTS
     Core
     Gui
@@ -35,15 +36,27 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Qml
     QuickControls2
     WaylandClient
-    WebEngineQuick
-    Multimedia
     Network
     DBus
     Bluetooth
-    ShaderTools
     Svg
 )
 
+# Optional Qt6 modules (ZAIos works without these, but loses features)
+find_package(Qt6 6.5 COMPONENTS WebEngineQuick)
+find_package(Qt6 6.5 COMPONENTS Multimedia)
+find_package(Qt6 6.5 COMPONENTS ShaderTools)
+
+if(Qt6WebEngineQuick_FOUND)
+    message(STATUS "Qt6WebEngineQuick found — Browser page will be built")
+    add_compile_definitions(ZAIOS_HAVE_WEBENGINE)
+else()
+    message(WARNING "Qt6WebEngineQuick NOT found — Browser page will be disabled")
+endif()
+
+if(Qt6Multimedia_FOUND)
+    add_compile_definitions(ZAIOS_HAVE_MULTIMEDIA)
+endif()
 qt_standard_project_setup(REQUIRES 6.5)
 
 # ── Sources ──────────────────────────────────────────────────────────────────
@@ -110,14 +123,24 @@ target_link_libraries(zaios-shell PRIVATE
     Qt6::Qml
     Qt6::QuickControls2
     Qt6::WaylandClient
-    Qt6::WebEngineQuick
-    Qt6::Multimedia
     Qt6::Network
     Qt6::DBus
     Qt6::Bluetooth
-    Qt6::ShaderTools
     Qt6::Svg
 )
+
+# Link optional libraries if they were found
+if(Qt6WebEngineQuick_FOUND)
+    target_link_libraries(zaios-shell PRIVATE Qt6::WebEngineQuick)
+endif()
+
+if(Qt6Multimedia_FOUND)
+    target_link_libraries(zaios-shell PRIVATE Qt6::Multimedia)
+endif()
+
+if(Qt6ShaderTools_FOUND)
+    target_link_libraries(zaios-shell PRIVATE Qt6::ShaderTools)
+endif()
 
 target_compile_definitions(zaios-shell PRIVATE
     ZAIOS_SHELL_VERSION="${PROJECT_VERSION}"
