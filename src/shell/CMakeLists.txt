@@ -78,7 +78,7 @@ set(ZAIOS_SOURCES
 )
 
 # ── QML module ───────────────────────────────────────────────────────────────
-qt_add_qml_module(zaios-shell
+qt_add_qml_module(zaios_shell_qml
     URI ZAIos.Shell
     VERSION 1.0
     QML_FILES
@@ -127,6 +127,7 @@ target_link_libraries(zaios-shell PRIVATE
     Qt6::DBus
     Qt6::Bluetooth
     Qt6::Svg
+    zaios_shell_qml
 )
 
 # Link optional libraries if they were found
