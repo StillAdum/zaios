@@ -21,8 +21,8 @@ safe-outputs:
       - "src/**"
       - "build.sh"
       - "scripts/**"
-	  - "rootfs/**"
-	  - "calamares/**"
+      - "rootfs/**"
+      - "calamares/**"
 ---
 
 # Intent
