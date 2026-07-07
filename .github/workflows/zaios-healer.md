@@ -5,10 +5,10 @@ on:
     workflows: ["Build ZAIos ISO"] # Targets your main build file name
     types: [completed]
 
-engine: gemini # Fast, large context window perfect for long compiler logs
+engine: copilot # Fast, large context window perfect for long compiler logs
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   actions: read
 ---
 
