@@ -38,6 +38,9 @@
 #define SOCK_PATH     "/run/zaios/input.sock"
 #define MAX_DEVICES   32
 
+/* Forward declaration - defined at end of file */
+static int mkdir_p(const char *path, mode_t mode);
+
 static int running = 1;
 static void on_sigterm(int s) { (void)s; running = 0; }
 
@@ -79,7 +82,7 @@ static int open_input_devices(void) {
 
         /* Read device capabilities */
         unsigned long evbits[4] = {0};
-        ioctl(fd, EVIOCGBIT(EV_EV, sizeof(evbits)), evbits);
+        ioctl(fd, EVIOCGBIT(EV_SYN, sizeof(evbits)), evbits);
 
         struct input_dev *dev = &devs[dev_count];
         dev->fd = fd;
