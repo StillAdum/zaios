@@ -105,7 +105,7 @@ void NetworkManager::scan() {
     });
 }
 
-void NetworkManager::connect(const QString &ssid, const QString &psk) {
+void NetworkManager::connectToNetwork(const QString &ssid, const QString &psk) {
     QString cmd = QString("{\"cmd\":\"connect\",\"ssid\":\"%1\",\"psk\":\"%2\"}")
                       .arg(ssid).arg(psk);
     sendCommand(cmd);
