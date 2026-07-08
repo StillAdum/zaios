@@ -214,7 +214,7 @@ Item {
                                 passwordPrompt.visible = true;
                                 passwordInput.forceActiveFocus();
                             } else {
-                                Network.connect(modelData.ssid, "");
+                                Network.connectToNetwork(modelData.ssid, "");
                             }
                         }
                     }
@@ -288,7 +288,7 @@ Item {
                     Keys.onEnterPressed:  doConnect()
 
                     function doConnect() {
-                        Network.connect(passwordPrompt.ssid, text);
+                        Network.connectToNetwork(passwordPrompt.ssid, text);
                         passwordPrompt.visible = false;
                         passwordInput.text = "";
                     }
