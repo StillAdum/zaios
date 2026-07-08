@@ -21,7 +21,6 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QtQml>
-#include <QWaylandClient>
 #include <QSurfaceFormat>
 #include <QFontDatabase>
 #include <QIcon>
