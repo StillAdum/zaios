@@ -134,7 +134,7 @@ jobs:
             \
             qml6-module-qtquick-controls qml6-module-qtquick-layouts \
             qml6-module-qtquick-window qml6-module-qtquick-templates \
-            qml6-module-qtquick-particles qml6-module-qtwayland \
+            qml6-module-qtquick-particles \
             qml6-module-qtqml-models qml6-module-qtqml-workerscript \
             libqt6core6 libqt6gui6 libqt6quick6 libqt6qml6 \
             libqt6quickcontrols2-6 libqt6quicklayouts6 libqt6multimedia6 \
