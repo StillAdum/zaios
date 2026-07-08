@@ -28,7 +28,7 @@ public:
     QVariantList networks() const { return m_networks; }
 
     Q_INVOKABLE void scan();
-    Q_INVOKABLE void connect(const QString &ssid, const QString &psk);
+    Q_INVOKABLE void connectToNetwork(const QString &ssid, const QString &psk);
     Q_INVOKABLE void disconnect();
     Q_INVOKABLE void refreshStatus();
 
