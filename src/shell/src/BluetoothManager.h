@@ -31,8 +31,8 @@ public:
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
     Q_INVOKABLE void pair(const QString &address);
-    Q_INVOKABLE void connect(const QString &address);
-    Q_INVOKABLE void disconnect(const QString &address);
+    Q_INVOKABLE void connectToDevice(const QString &address);
+    Q_INVOKABLE void disconnectFromDevice(const QString &address);
     Q_INVOKABLE void remove(const QString &address);
     Q_INVOKABLE void trust(const QString &address);
 
