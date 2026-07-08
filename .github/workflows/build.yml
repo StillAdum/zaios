@@ -108,7 +108,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             build-essential gcc g++ make cmake ninja-build \
-            bc bison flex libelf-dev libssl-dev \
+            bc bison flex libelf-dev libssl-dev gawk \
             python3 python3-pip python3-venv \
             pkg-config wget curl git ca-certificates \
             xorriso grub-pc-bin grub-efi-amd64-bin isolinux syslinux-utils \
@@ -118,17 +118,28 @@ jobs:
             libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libgbm-dev \
             libxkbcommon-dev libfontconfig1-dev libfreetype6-dev \
             libxcb1-dev libx11-dev libx11-xcb-dev \
-            libpulse-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libunwind-dev libclang-14-dev \
+            libpulse-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libunwind-dev \
             libxml2-dev libxslt1-dev libnss3-dev libnspr4-dev \
-            libwoff-dev libvpx-dev libopus-dev \
             libglib2.0-dev libcups2-dev libdbus-1-dev libicu-dev \
             libpcre2-dev libz3-dev libdouble-conversion-dev libharfbuzz-dev \
             libjpeg-dev libpng-dev libtiff-dev libsqlite3-dev \
             libffi-dev libslirp-dev libtirpc-dev \
+            gperf ccache rsync file \
+            \
             qt6-base-dev qt6-declarative-dev qt6-wayland-dev \
             qt6-multimedia-dev qt6-svg-dev qt6-shadertools-dev \
-            qt6-connectivity-dev libqt6bluetooth-dev \
-            gperf ccache rsync file
+            qt6-connectivity-dev \
+            qt6-base-dev-tools qt6-declarative-dev-tools qt6-wayland-dev-tools \
+            \
+            qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtquick-templates \
+            qml6-module-qtquick-particles qml6-module-qtwayland \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            libqt6core6 libqt6gui6 libqt6quick6 libqt6qml6 \
+            libqt6quickcontrols2-6 libqt6quicklayouts6 libqt6multimedia6 \
+            libqt6bluetooth6 libqt6waylandclient6 libqt6waylandcompositor6 \
+            libqt6svg6 libqt6opengl6 libqt6dbus6 libqt6network6
           # Cross toolchains (only installed when needed)
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
             sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
@@ -137,7 +148,6 @@ jobs:
           fi
           # Calamares binary (staged into ISO for installer)
           sudo apt-get install -y --no-install-recommends calamares || true
-
       - name: ✅ Verify tools
         run: |
           for cmd in gcc g++ make cmake ninja xorriso grub-mkimage mksquashfs wget python3; do
