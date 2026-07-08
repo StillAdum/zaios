@@ -195,7 +195,7 @@ download_sources() {
     # GitHub tag tarball (Google's CDN often rate-limits).
     declare -A SRC_URLS=(
         ["linux-$LINUX_VERSION.tar.xz"]="https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$LINUX_VERSION.tar.xz"
-        ["qt-everywhere-src-$QT_VERSION.tar.xz"]="https://download.qt.io/archive/qt/$(echo $QT_VERSION | cut -d. -f1-2)/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
+        # ["qt-everywhere-src-$QT_VERSION.tar.xz"]="https://download.qt.io/archive/qt/$(echo $QT_VERSION | cut -d. -f1-2)/$QT_VERSION/single/qt-everywhere-src-$QT_VERSION.tar.xz"
         ["glibc-$GLIBC_VERSION.tar.xz"]="https://ftp.gnu.org/gnu/glibc/glibc-$GLIBC_VERSION.tar.xz"
         ["busybox-$BUSYBOX_VERSION.tar.bz2"]="https://busybox.net/downloads/busybox-$BUSYBOX_VERSION.tar.bz2"
         ["mpv-$MPV_VERSION.tar.gz"]="https://github.com/mpv-player/mpv/archive/refs/tags/v$MPV_VERSION.tar.gz"
@@ -409,37 +409,20 @@ build_init() {
     fi
 }
 
-# ─── Step 5: build Qt6 + ZAIos Shell ───────────────────────────────────────
+# ─── Step 5: build ZAIos Shell (uses system Qt6 — no 2-hour build) ────────
 build_shell() {
-    section "Building ZAIos Shell (Qt6/QML)"
+    section "Building ZAIos Shell (system Qt6/QML)"
 
     local cross="$(cross_tuple)"
-    local qt_prefix="$BUILD_DIR/qt-$ARCH"
+    local qt_prefix="/usr"   # Use system Qt6 (installed via apt in workflow)
     local shell_src="$ZAIOS_ROOT/src/shell"
     local shell_build="$BUILD_DIR/shell-$ARCH"
 
-    # If Qt6 not yet built for this arch, build it
-    if [[ ! -f "$qt_prefix/lib/libQt6Core.so" ]] && [[ ! -f "$qt_prefix/lib/libQt6Core.a" ]]; then
-        log "Building Qt6 base (this takes ~2 hours on 4 cores)"
-        local qtsrc="$SRC_DIR/qt-everywhere-src-$QT_VERSION"
-        ( cd "$qtsrc" && ./configure \
-            -prefix "$qt_prefix" \
-            -release \
-            -opensource -confirm-license \
-            ${cross:+-device-option CROSS_COMPILE=$cross} \
-            -nomake examples -nomake tests \
-            -skip qtwebengine -skip qtactiveqt \
-            -system-zlib -system-libjpeg -system-libpng \
-            -dbus -gui -widgets \
-            -no-feature-sqlmodel \
-            -no-warnings-are-errors \
-            2>&1 | tail -50 ) || die "Qt6 configure failed"
-        ( cd "$qtsrc" && cmake --build . -j"$JOBS" 2>&1 | tail -50 ) || die "Qt6 build failed"
-        ( cd "$qtsrc" && cmake --install . 2>&1 | tail -20 ) || die "Qt6 install failed"
-        ok "Qt6 installed to $qt_prefix"
-    else
-        ok "Qt6 already built at $qt_prefix (skipping)"
+    # Verify system Qt6 is installed
+    if ! pkg-config --exists Qt6Core 2>/dev/null; then
+        die "System Qt6 not found. Install: sudo apt install qt6-base-dev qt6-declarative-dev qt6-wayland-dev qt6-multimedia-dev qt6-svg-dev qt6-shadertools-dev qt6-connectivity-dev"
     fi
+    ok "System Qt6 found: $(pkg-config --modversion Qt6Core)"
 
     # Build ZAIos Shell itself
     log "Configuring ZAIos Shell"
@@ -462,18 +445,30 @@ build_shell() {
         log "Staging ZAIos Shell into rootfs"
         mkdir -p "$ROOTFS_DIR/usr/bin" "$ROOTFS_DIR/usr/lib/zaios"
         cp "$shell_build/zaios-shell" "$ROOTFS_DIR/usr/bin/zaios-shell"
-        # Qt plugins + QML — copy runtime deps
-        mkdir -p "$ROOTFS_DIR/usr/lib/qt6" "$ROOTFS_DIR/usr/share/zaios/qml"
-        cp -a "$qt_prefix/qml"/* "$ROOTFS_DIR/usr/share/zaios/qml/" 2>/dev/null || true
-        cp -a "$qt_prefix/plugins"/* "$ROOTFS_DIR/usr/lib/qt6/" 2>/dev/null || true
+        # Qt QML files from shell source
+        mkdir -p "$ROOTFS_DIR/usr/share/zaios/qml"
         cp -a "$shell_src/qml"/* "$ROOTFS_DIR/usr/share/zaios/qml/" 2>/dev/null || true
-        # Qt libs (shared)
+        # Copy system Qt6 runtime libraries into rootfs
+        local qt_lib_dir=$(pkg-config --variable=libdir Qt6Core 2>/dev/null || echo "/usr/lib/x86_64-linux-gnu")
+        local qt_qml_dir=$(pkg-config --variable=qml_install_dir Qt6Quick 2>/dev/null || echo "/usr/lib/qt6/qml")
+        local qt_plugin_dir=$(pkg-config --variable=plugin_dir Qt6Core 2>/dev/null || echo "/usr/lib/x86_64-linux-gnu/qt6/plugins")
+        # Copy QML modules used by the shell
+        for mod in QtQuick QtQuickControls2 QtQuick/Layouts QtQuick/Window QtQuick/Particles QtQml QtQml/Models QtWayland; do
+            [[ -d "$qt_qml_dir/$mod" ]] && cp -a "$qt_qml_dir/$mod" "$ROOTFS_DIR/usr/lib/qt6/qml/" 2>/dev/null || true
+        done
+        # Copy Qt shared libraries
         for lib in libQt6Core libQt6Gui libQt6Quick libQt6Qml libQt6Network libQt6DBus \
-                   libQt6Multimedia libQt6WebEngineCore libQt6WebEngineQuick \
-                   libQt6Bluetooth libQt6WaylandClient; do
-            for f in "$qt_prefix/lib/$lib".so*; do
+                   libQt6Multimedia libQt6Bluetooth libQt6WaylandClient libQt6OpenGL libQt6Svg \
+                   libQt6QuickControls2 libQt6QuickLayouts libQt6QuickTemplates2 libQt6QuickParticles \
+                   libQt6QmlModels libQt6QmlWorkerScript; do
+            for f in "$qt_lib_dir/$lib".so*; do
                 [[ -f "$f" ]] && cp -a "$f" "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
             done
+        done
+        # Qt plugins (platforms, image formats, etc.)
+        mkdir -p "$ROOTFS_DIR/usr/lib/qt6/plugins"
+        for plugin_dir in platforms imageformats wayland-shell-integration wayland-decoration-client wayland-graphics-integration-client; do
+            [[ -d "$qt_plugin_dir/$plugin_dir" ]] && cp -a "$qt_plugin_dir/$plugin_dir" "$ROOTFS_DIR/usr/lib/qt6/plugins/" 2>/dev/null || true
         done
         ok "Shell + Qt runtime staged"
     fi
