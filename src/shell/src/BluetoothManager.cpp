@@ -173,7 +173,7 @@ void BluetoothManager::pair(const QString &address) {
     refreshDevices();
 }
 
-void BluetoothManager::connect(const QString &address) {
+void BluetoothManager::connectToDevice(const QString &address) {
     QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
     QDBusReply<void> reply = devIface.call("Connect");
@@ -184,7 +184,7 @@ void BluetoothManager::connect(const QString &address) {
     emit deviceConnected(address);
 }
 
-void BluetoothManager::disconnect(const QString &address) {
+void BluetoothManager::disconnectFromDevice(const QString &address) {
     QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
     devIface.call("Disconnect");
