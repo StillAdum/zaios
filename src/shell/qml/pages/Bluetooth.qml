@@ -162,8 +162,8 @@ Item {
                                     bgColor: modelData.connected ? Theme.error :
                                              modelData.paired ? Theme.success : Theme.accent
                                     onClicked: {
-                                        if (modelData.connected) Bluetooth.disconnect(modelData.path);
-                                        else if (modelData.paired) Bluetooth.connect(modelData.path);
+                                        if (modelData.connected) Bluetooth.disconnectFromDevice(modelData.path);
+                                        else if (modelData.paired) Bluetooth.connectToDevice(modelData.path);
                                         else Bluetooth.pair(modelData.path);
                                     }
                                 }
