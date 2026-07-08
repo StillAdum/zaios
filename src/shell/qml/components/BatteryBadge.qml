@@ -1,7 +1,7 @@
 /*
- * BatteryBadge.qml — Battery status indicator.
+ * BatteryBadge.qml - Battery status indicator.
  *
- * Reads /sys/class/power_supply/BAT*/capacity and status.
+ * Reads /sys/class/power_supply/BAT-something/capacity and status.
  * Most TVs don't have a battery, so this hides itself if no battery found.
  */
 import QtQuick
