@@ -15,6 +15,9 @@ permissions:
   actions: read
   copilot-requests: write
 
+secrets:
+  - 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
+
 safe-outputs:
   create-pull-request:
     branch-prefix: "ai-fix/zaios-"
