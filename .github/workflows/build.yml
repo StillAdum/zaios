@@ -61,7 +61,7 @@ env:
 jobs:
   build:
     name: Build ${{ github.event.inputs.arch || 'x86_64' }} ISO
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
 
     strategy:
@@ -125,6 +125,9 @@ jobs:
             libpcre2-dev libz3-dev libdouble-conversion-dev libharfbuzz-dev \
             libjpeg-dev libpng-dev libtiff-dev libsqlite3-dev \
             libffi-dev libslirp-dev libtirpc-dev \
+            qt6-base-dev qt6-declarative-dev qt6-wayland-dev \
+            qt6-multimedia-dev qt6-svg-dev qt6-shadertools-dev \
+            qt6-connectivity-dev libqt6bluetooth-dev \
             gperf ccache rsync file
           # Cross toolchains (only installed when needed)
           if [[ "${{ matrix.arch }}" == "arm64" ]]; then
