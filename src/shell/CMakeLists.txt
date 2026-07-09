@@ -29,7 +29,7 @@ set(CMAKE_AUTOUIC ON)
 
 # ── Find Qt6 ─────────────────────────────────────────────────────────────────
 # Required Qt6 modules
-find_package(Qt6 6.5 REQUIRED COMPONENTS
+find_package(Qt6 REQUIRED COMPONENTS
     Core
     Gui
     Quick
@@ -43,9 +43,9 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 )
 
 # Optional Qt6 modules (ZAIos works without these, but loses features)
-find_package(Qt6 6.5 COMPONENTS WebEngineQuick)
-find_package(Qt6 6.5 COMPONENTS Multimedia)
-find_package(Qt6 6.5 COMPONENTS ShaderTools)
+find_package(Qt6 COMPONENTS WebEngineQuick)
+find_package(Qt6 COMPONENTS Multimedia)
+find_package(Qt6 COMPONENTS ShaderTools)
 
 if(Qt6WebEngineQuick_FOUND)
     message(STATUS "Qt6WebEngineQuick found — Browser page will be built")
@@ -57,7 +57,7 @@ endif()
 if(Qt6Multimedia_FOUND)
     add_compile_definitions(ZAIOS_HAVE_MULTIMEDIA)
 endif()
-qt_standard_project_setup(REQUIRES 6.5)
+qt_standard_project_setup()
 
 # ── Sources ──────────────────────────────────────────────────────────────────
 set(ZAIOS_SOURCES
