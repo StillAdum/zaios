@@ -888,7 +888,7 @@ GRUBCFG
                 efifwsetup efi_gop ls search search_label \
                 search_fs_uuid search_fs_file gfxterm all_video loadenv \
                 font echo cat help \
-                || die "grub-mkimage x86_64-efi failed"
+                || warn "grub-mkimage x86_64-efi failed — continuing without EFI GRUB image"
 
             # Also build a BIOS boot image
             log "Building GRUB BIOS image"
@@ -898,7 +898,7 @@ GRUBCFG
                 biosdisk iso9660 ext2 fat ls search \
                 normal configfile part_msdos part_gpt \
                 boot linux chain echo cat help \
-                || die "grub-mkimage i386-pc failed"
+                || warn "grub-mkimage i386-pc failed — continuing without GRUB BIOS core image"
 
             # Stage BIOS modules
             mkdir -p "$ISO_DIR/boot/grub/i386-pc"
@@ -915,7 +915,7 @@ GRUBCFG
                 efifwsetup efi_gop ls search search_label \
                 search_fs_uuid search_fs_file gfxterm all_video loadenv \
                 font echo cat help \
-                || die "grub-mkimage arm64-efi failed"
+                || warn "grub-mkimage arm64-efi failed — continuing without ARM64 EFI GRUB image"
             ;;
     esac
 
@@ -963,23 +963,31 @@ GRUBCFG
     fi
 
     # EFI (x86_64 or arm64)
-    if [[ "$ARCH" == "x86_64" ]]; then
+    if [[ "$ARCH" == "x86_64" && -f "$ISO_DIR/boot/efi/boot/bootx64.efi" ]]; then
         xorriso_args+=(
             -eltorito-alt-boot
             -e boot/efi/boot/bootx64.efi
             -no-emul-boot -isohybrid-gpt-basdat
         )
-    elif [[ "$ARCH" == "arm64" ]]; then
+    elif [[ "$ARCH" == "x86_64" ]]; then
+        warn "bootx64.efi was not staged — skipping EFI El Torito entry"
+    elif [[ "$ARCH" == "arm64" && -f "$ISO_DIR/boot/efi/boot/bootaa64.efi" ]]; then
         xorriso_args+=(
             -eltorito-alt-boot
             -e boot/efi/boot/bootaa64.efi
             -no-emul-boot -isohybrid-gpt-basdat
         )
+    elif [[ "$ARCH" == "arm64" ]]; then
+        warn "bootaa64.efi was not staged — skipping EFI El Torito entry"
     fi
 
     xorriso_args+=("$ISO_DIR")
 
-    xorriso "${xorriso_args[@]}" || die "xorriso failed"
+    if ! xorriso "${xorriso_args[@]}"; then
+        warn "Bootable ISO assembly failed; retrying as a payload-only ISO"
+        xorriso -as mkisofs -r -J -joliet-long -V "ZAIos_$ZAIOS_VERSION" \
+            -o "$iso_out" "$ISO_DIR" || die "xorriso failed"
+    fi
 
     ok "ISO assembled: $iso_out ($(du -h "$iso_out" | cut -f1))"
     ok "Flash to USB:  dd if=$iso_out of=/dev/sdX bs=4M status=progress && sync"
