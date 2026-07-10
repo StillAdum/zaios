@@ -481,8 +481,15 @@ stage_kernel_into_rootfs() {
     local kimg="$kbuild/arch/$arch/boot/bzImage"
 
     if [[ ! -f "$kimg" ]]; then
-        warn "Kernel image not found at $kimg — rootfs will be assembled without /boot/vmlinuz"
-        return 0
+        local fallback_kimg=""
+        fallback_kimg="$(find "$kbuild" -path '*/boot/bzImage' -type f 2>/dev/null | head -n 1 || true)"
+        if [[ -n "$fallback_kimg" ]]; then
+            warn "Kernel image not found at $kimg; using $fallback_kimg"
+            kimg="$fallback_kimg"
+        else
+            warn "Kernel image not found at $kimg — rootfs will be assembled without /boot/vmlinuz"
+            return 0
+        fi
     fi
 
     log "Staging kernel + modules into rootfs"
@@ -771,7 +778,18 @@ build_iso() {
     fi
 
     [[ ! -f "$sqfs" ]] && die "rootfs squashfs missing: $sqfs"
-    [[ ! -f "$kimg" ]] && die "kernel image missing: $kimg"
+    if [[ ! -f "$kimg" ]]; then
+        local fallback_kimg=""
+        fallback_kimg="$(find "$BUILD_DIR/linux-$ARCH" -path '*/boot/bzImage' -type f 2>/dev/null | head -n 1 || true)"
+        if [[ -n "$fallback_kimg" ]]; then
+            warn "Kernel image missing from rootfs; staging $fallback_kimg"
+            mkdir -p "$(dirname "$kimg")"
+            cp "$fallback_kimg" "$kimg"
+            ln -sf "$(basename "$kimg")" "$ROOTFS_DIR/boot/vmlinuz"
+        else
+            die "kernel image missing: $kimg"
+        fi
+    fi
     [[ ! -f "$irfs" ]] && die "initramfs missing: $irfs"
 
     rm -rf "$ISO_DIR"; mkdir -p "$ISO_DIR"/{zaios,boot/{grub,isolinux,efi/boot},live}
