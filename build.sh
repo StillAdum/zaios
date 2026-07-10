@@ -143,7 +143,7 @@ mkdir -p "$DL_DIR" "$SRC_DIR" "$BUILD_DIR" "$OUT_DIR"
 # Normalize arch for kernel
 kernel_arch() {
     case "$ARCH" in
-        x86_64) echo "x86_64" ;;
+        x86_64) echo "x86"    ;;
         arm64)  echo "arm64"  ;;
         arm)    echo "arm"    ;;
     esac
