@@ -867,10 +867,9 @@ GRUBCFG
                 -o "$ISO_DIR/boot/efi/boot/bootx64.efi" \
                 ext2 fat iso9660 part_gpt part_msdos \
                 normal boot linux configfile loopback chain \
-                efifwsetup efi_gop efi_uga ls search search_label \
-                search_fs_uuid search_fs_file gfxterm gfxterm_background \
-                gfxterm_menu test all_video loadenv exfat ntfs udf \
-                font echo cat help part_apple hfsplus \
+                efifwsetup efi_gop ls search search_label \
+                search_fs_uuid search_fs_file gfxterm all_video loadenv \
+                font echo cat help \
                 || die "grub-mkimage x86_64-efi failed"
 
             # Also build a BIOS boot image
@@ -896,8 +895,7 @@ GRUBCFG
                 ext2 fat iso9660 part_gpt part_msdos \
                 normal boot linux configfile loopback chain \
                 efifwsetup efi_gop ls search search_label \
-                search_fs_uuid search_fs_file gfxterm gfxterm_background \
-                gfxterm_menu test all_video loadenv exfat ntfs udf \
+                search_fs_uuid search_fs_file gfxterm all_video loadenv \
                 font echo cat help \
                 || die "grub-mkimage arm64-efi failed"
             ;;
@@ -936,12 +934,14 @@ GRUBCFG
     fi
 
     # ISOLINUX (BIOS)
-    if [[ "$ARCH" == "x86_64" ]]; then
+    if [[ "$ARCH" == "x86_64" && -f "$ISO_DIR/boot/isolinux/isolinux.bin" ]]; then
         xorriso_args+=(
             -b boot/isolinux/isolinux.bin
             -c boot/isolinux/boot.cat
             -no-emul-boot -boot-load-size 4 -boot-info-table
         )
+    elif [[ "$ARCH" == "x86_64" ]]; then
+        warn "isolinux.bin was not staged — ISO will be EFI-bootable only"
     fi
 
     # EFI (x86_64 or arm64)
