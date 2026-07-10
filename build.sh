@@ -474,6 +474,62 @@ build_shell() {
     fi
 }
 
+stage_kernel_into_rootfs() {
+    local arch="$(kernel_arch)"
+    local kbuild="$BUILD_DIR/linux-$ARCH"
+    local moddir="$BUILD_DIR/modules-$ARCH"
+    local kimg="$kbuild/arch/$arch/boot/bzImage"
+
+    if [[ ! -f "$kimg" ]]; then
+        warn "Kernel image not found at $kimg — rootfs will be assembled without /boot/vmlinuz"
+        return 0
+    fi
+
+    log "Staging kernel + modules into rootfs"
+    local kimg_dest="$ROOTFS_DIR/boot/vmlinuz-$ZAIOS_VERSION-$ARCH"
+    local kdtb_dest="$ROOTFS_DIR/boot/dtb-$ARCH"
+    mkdir -p "$ROOTFS_DIR/boot" "$ROOTFS_DIR/lib/modules"
+    cp "$kimg" "$kimg_dest"
+
+    if [[ "$ARCH" != "x86_64" && -d "$kbuild/arch/$arch/boot/dts" ]]; then
+        mkdir -p "$kdtb_dest"
+        cp -r "$kbuild/arch/$arch/boot/dts/"*.dtb "$kdtb_dest/" 2>/dev/null || true
+    fi
+
+    if [[ -d "$moddir/lib/modules" ]]; then
+        cp -a "$moddir/lib/modules/"* "$ROOTFS_DIR/lib/modules/" 2>/dev/null || true
+    else
+        warn "Kernel modules not found at $moddir/lib/modules"
+    fi
+
+    ln -sf "vmlinuz-$ZAIOS_VERSION-$ARCH" "$ROOTFS_DIR/boot/vmlinuz"
+    ok "Kernel staged to rootfs/boot/"
+}
+
+stage_host_glibc_into_rootfs() {
+    log "Staging host glibc runtime into rootfs"
+
+    local multiarch=""
+    multiarch="$(gcc -print-multiarch 2>/dev/null || true)"
+
+    mkdir -p "$ROOTFS_DIR/lib" "$ROOTFS_DIR/lib64" "$ROOTFS_DIR/usr/lib"
+    if [[ -n "$multiarch" && -d "/lib/$multiarch" ]]; then
+        mkdir -p "$ROOTFS_DIR/lib/$multiarch" "$ROOTFS_DIR/usr/lib/$multiarch"
+        cp -a "/lib/$multiarch"/ld-linux*.so* "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
+        cp -a "/lib/$multiarch"/lib{c,m,dl,pthread,rt,resolv,nss_dns,nss_files,gcc_s,stdc++}.so* \
+            "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
+        cp -a "/usr/lib/$multiarch"/lib{gcc_s,stdc++}.so* \
+            "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
+    fi
+
+    cp -a /lib/ld-linux*.so* "$ROOTFS_DIR/lib/" 2>/dev/null || true
+    cp -a /lib64/ld-linux*.so* "$ROOTFS_DIR/lib64/" 2>/dev/null || true
+    cp -a /lib*/lib{c,m,dl,pthread,rt,resolv,nss_dns,nss_files,gcc_s,stdc++}.so* \
+        "$ROOTFS_DIR/lib/" 2>/dev/null || true
+
+    ok "Host glibc runtime staged"
+}
+
 # ─── Step 6: assemble rootfs ───────────────────────────────────────────────
 build_rootfs() {
     section "Assembling rootfs for $ARCH"
@@ -498,34 +554,21 @@ build_rootfs() {
         ln -sf /bin/busybox "$ROOTFS_DIR/bin/$applet" 2>/dev/null || true
     done
 
-    # glibc
-    local glibc_src="$SRC_DIR/glibc-$GLIBC_VERSION"
-    if [[ ! -f "$BUILD_DIR/glibc-$ARCH/usr/lib/libc.so.6" ]]; then
-        log "Building glibc $GLIBC_VERSION"
-        local gbuild="$BUILD_DIR/glibc-build-$ARCH"
-        mkdir -p "$gbuild"
-        local cross="$(cross_tuple)"
-        # For native builds (cross is empty), omit --host entirely.
-        # For cross builds, use the proper triplet (e.g. aarch64-linux-gnu).
-        local host_flag=""
-        local cc_flag=""
-        if [[ -n "$cross" ]]; then
-            host_flag="--host=${cross%-linux-gnu-}linux-gnu"
-            cc_flag="CC=${cross}gcc"
-        fi
-        ( cd "$gbuild" && "$glibc_src/configure" \
-            --prefix=/usr \
-            $host_flag \
-            $cc_flag \
-            --enable-kernel=5.15 \
-            --disable-werror && \
-            make -j"$JOBS" && \
-            make DESTDIR="$BUILD_DIR/glibc-$ARCH" install ) || die "glibc build failed"
+    # glibc. Prefer an already-built cached tree, but do not build glibc during
+    # the rootfs assembly step on CI: it is too slow for the rootfs timeout and
+    # the shell build already targets the runner's system Qt/glibc.
+    local host_arch="$(uname -m)"
+    if [[ -f "$BUILD_DIR/glibc-$ARCH/usr/lib/libc.so.6" ]]; then
+        cp -a "$BUILD_DIR/glibc-$ARCH/usr/lib/"*so* "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
+        cp -a "$BUILD_DIR/glibc-$ARCH/usr/lib/ld-linux"* "$ROOTFS_DIR/lib/" 2>/dev/null || true
+    elif [[ "$ARCH" == "$host_arch" || ( "$ARCH" == "x86_64" && "$host_arch" == "amd64" ) ]]; then
+        stage_host_glibc_into_rootfs
+    else
+        die "No cached glibc runtime found for $ARCH at $BUILD_DIR/glibc-$ARCH"
     fi
-    cp -a "$BUILD_DIR/glibc-$ARCH/usr/lib/"*so* "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
-    cp -a "$BUILD_DIR/glibc-$ARCH/usr/lib/ld-linux"* "$ROOTFS_DIR/lib/" 2>/dev/null || true
 
     # Now run other build steps that stage into rootfs
+    stage_kernel_into_rootfs
     build_init
     build_shell
 
@@ -535,7 +578,7 @@ build_rootfs() {
         mkdir -p "$ROOTFS_DIR/usr/bin"
         cp "$ytdlp_src/yt-dlp" "$ROOTFS_DIR/usr/bin/yt-dlp" 2>/dev/null || \
         cp "$ytdlp_src/yt-dlp/yt-dlp" "$ROOTFS_DIR/usr/bin/yt-dlp" 2>/dev/null || true
-        chmod +x "$ROOTFS_DIR/usr/bin/yt-dlp"
+        [[ -f "$ROOTFS_DIR/usr/bin/yt-dlp" ]] && chmod +x "$ROOTFS_DIR/usr/bin/yt-dlp"
     fi
 
     # Stage Calamares config (the binary itself must be built separately)
