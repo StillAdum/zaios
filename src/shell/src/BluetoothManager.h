@@ -30,11 +30,11 @@ public:
     Q_INVOKABLE void setPowered(bool on);
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
-    Q_INVOKABLE void pair(const QString &address);
-    Q_INVOKABLE void connectToDevice(const QString &address);
-    Q_INVOKABLE void disconnectFromDevice(const QString &address);
-    Q_INVOKABLE void remove(const QString &address);
-    Q_INVOKABLE void trust(const QString &address);
+    Q_INVOKABLE void pair(const QString &devicePath);
+    Q_INVOKABLE void connectToDevice(const QString &devicePath);
+    Q_INVOKABLE void disconnectFromDevice(const QString &devicePath);
+    Q_INVOKABLE void remove(const QString &devicePath);
+    Q_INVOKABLE void trust(const QString &devicePath);
 
 signals:
     void poweredChanged();
