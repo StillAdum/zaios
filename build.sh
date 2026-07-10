@@ -543,14 +543,22 @@ build_rootfs() {
 
     # Install BusyBox (provides coreutils, util-linux, etc.)
     local bb_src="$SRC_DIR/busybox-$BUSYBOX_VERSION"
+    local busybox_bin="$bb_src/busybox"
     if [[ ! -f "$bb_src/busybox" ]]; then
         log "Building BusyBox"
-        ( cd "$bb_src" && make defconfig && make -j"$JOBS" )
+        if ! ( cd "$bb_src" && make defconfig && make -j"$JOBS" ); then
+            if command -v busybox >/dev/null 2>&1; then
+                warn "BusyBox source build failed; using host busybox fallback"
+                busybox_bin="$(command -v busybox)"
+            else
+                die "BusyBox build failed and no host busybox fallback is available"
+            fi
+        fi
     fi
-    cp "$bb_src/busybox" "$ROOTFS_DIR/bin/busybox"
+    cp "$busybox_bin" "$ROOTFS_DIR/bin/busybox"
     chmod +x "$ROOTFS_DIR/bin/busybox"
     # Symlink all applets
-    for applet in $("$bb_src/busybox" --list); do
+    for applet in $("$ROOTFS_DIR/bin/busybox" --list); do
         ln -sf /bin/busybox "$ROOTFS_DIR/bin/$applet" 2>/dev/null || true
     done
 
@@ -653,15 +661,23 @@ build_initramfs() {
 
     # BusyBox (static)
     local bb_src="$SRC_DIR/busybox-$BUSYBOX_VERSION"
+    local busybox_bin="$bb_src/busybox"
     if [[ ! -f "$bb_src/busybox" ]]; then
         log "Building static BusyBox for initramfs"
-        ( cd "$bb_src" && make defconfig && \
+        if ! ( cd "$bb_src" && make defconfig && \
           sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config && \
-          make -j"$JOBS" )
+          make -j"$JOBS" ); then
+            if command -v busybox >/dev/null 2>&1; then
+                warn "Static BusyBox source build failed; using host busybox fallback"
+                busybox_bin="$(command -v busybox)"
+            else
+                die "Static BusyBox build failed and no host busybox fallback is available"
+            fi
+        fi
     fi
-    cp "$bb_src/busybox" "$irfs/bin/busybox"
+    cp "$busybox_bin" "$irfs/bin/busybox"
     chmod +x "$irfs/bin/busybox"
-    for applet in $("$bb_src/busybox" --list); do
+    for applet in $("$irfs/bin/busybox" --list); do
         ln -sf /bin/busybox "$irfs/bin/$applet" 2>/dev/null || true
     done
 
