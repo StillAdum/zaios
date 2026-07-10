@@ -24,6 +24,7 @@
 #include <QSurfaceFormat>
 #include <QFontDatabase>
 #include <QIcon>
+#include <QUrl>
 
 #include "InputBridge.h"
 #include "NetworkManager.h"
@@ -124,7 +125,11 @@ int main(int argc, char **argv) {
     engine.rootContext()->setContextProperty("zaiosVersion", ZAIOS_SHELL_VERSION);
 
     // ── Load main QML ─────────────────────────────────────────────────────
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     engine.loadFromModule("ZAIos.Shell", "Main");
+#else
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/ZAIos/Shell/qml/main.qml")));
+#endif
 
     if (engine.rootObjects().isEmpty()) {
         qCritical() << "Failed to load ZAIos Shell QML";

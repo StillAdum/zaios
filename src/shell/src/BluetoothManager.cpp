@@ -63,9 +63,9 @@ void BluetoothManager::findAdapter() {
             m_adapterIface = new QDBusInterface(BLUEZ_SERVICE, path,
                                                "org.bluez.Adapter1", bus, this);
             // Get current powered state
-            QDBusReply<QVariant> pwr = m_adapterIface->property("Powered");
+            QVariant pwr = m_adapterIface->property("Powered");
             if (pwr.isValid()) {
-                m_powered = pwr.value().toBool();
+                m_powered = pwr.toBool();
                 emit poweredChanged();
             }
             emit adapterChanged();
@@ -166,7 +166,7 @@ void BluetoothManager::stopScan() {
 
 void BluetoothManager::pair(const QString &address) {
     if (!m_adapterIface) return;
-    QDBusReply<void> reply = m_adapterIface->call("Pair", qVariantFromValue(QDBusObjectPath(address)));
+    QDBusReply<void> reply = m_adapterIface->call("Pair", QVariant::fromValue(QDBusObjectPath(address)));
     if (!reply.isValid()) {
         qWarning() << "Pair failed:" << reply.error();
     }
@@ -194,13 +194,13 @@ void BluetoothManager::disconnectFromDevice(const QString &address) {
 
 void BluetoothManager::remove(const QString &address) {
     if (!m_adapterIface) return;
-    m_adapterIface->call("RemoveDevice", qVariantFromValue(QDBusObjectPath(address)));
+    m_adapterIface->call("RemoveDevice", QVariant::fromValue(QDBusObjectPath(address)));
     refreshDevices();
 }
 
 void BluetoothManager::trust(const QString &address) {
     QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
-    devIface->setProperty("Trusted", true);
+    devIface.setProperty("Trusted", true);
     refreshDevices();
 }
