@@ -35,7 +35,6 @@ find_package(Qt6 REQUIRED COMPONENTS
     Quick
     Qml
     QuickControls2
-    WaylandClient
     Network
     DBus
     Bluetooth
@@ -122,7 +121,6 @@ target_link_libraries(zaios-shell PRIVATE
     Qt6::Quick
     Qt6::Qml
     Qt6::QuickControls2
-    Qt6::WaylandClient
     Qt6::Network
     Qt6::DBus
     Qt6::Bluetooth
