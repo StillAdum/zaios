@@ -626,10 +626,12 @@ EOF
 
     # Pack squashfs
     local sqfs="$BUILD_DIR/rootfs-$ARCH.squashfs"
+    local squashfs_processors="${MKSQUASHFS_PROCESSORS:-2}"
+    local squashfs_zstd_level="${MKSQUASHFS_ZSTD_LEVEL:-10}"
     log "Packing squashfs: $sqfs"
     rm -f "$sqfs"
-    mksquashfs "$ROOTFS_DIR" "$sqfs" -comp zstd -Xcompression-level 19 -noappend \
-        -progress || die "mksquashfs failed"
+    mksquashfs "$ROOTFS_DIR" "$sqfs" -comp zstd -Xcompression-level "$squashfs_zstd_level" \
+        -processors "$squashfs_processors" -noappend -progress || die "mksquashfs failed"
 
     ok "Rootfs squashfs: $sqfs ($(du -h "$sqfs" | cut -f1))"
 }
