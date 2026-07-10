@@ -164,42 +164,43 @@ void BluetoothManager::stopScan() {
     emit scanningChanged();
 }
 
-void BluetoothManager::pair(const QString &address) {
-    if (!m_adapterIface) return;
-    QDBusReply<void> reply = m_adapterIface->call("Pair", QVariant::fromValue(QDBusObjectPath(address)));
+void BluetoothManager::pair(const QString &devicePath) {
+    QDBusInterface devIface(BLUEZ_SERVICE, devicePath, "org.bluez.Device1",
+                            QDBusConnection::systemBus(), this);
+    QDBusReply<void> reply = devIface.call("Pair");
     if (!reply.isValid()) {
         qWarning() << "Pair failed:" << reply.error();
     }
     refreshDevices();
 }
 
-void BluetoothManager::connectToDevice(const QString &address) {
-    QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
+void BluetoothManager::connectToDevice(const QString &devicePath) {
+    QDBusInterface devIface(BLUEZ_SERVICE, devicePath, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
     QDBusReply<void> reply = devIface.call("Connect");
     if (!reply.isValid()) {
         qWarning() << "Connect failed:" << reply.error();
     }
     refreshDevices();
-    emit deviceConnected(address);
+    emit deviceConnected(devicePath);
 }
 
-void BluetoothManager::disconnectFromDevice(const QString &address) {
-    QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
+void BluetoothManager::disconnectFromDevice(const QString &devicePath) {
+    QDBusInterface devIface(BLUEZ_SERVICE, devicePath, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
     devIface.call("Disconnect");
     refreshDevices();
-    emit deviceDisconnected(address);
+    emit deviceDisconnected(devicePath);
 }
 
-void BluetoothManager::remove(const QString &address) {
+void BluetoothManager::remove(const QString &devicePath) {
     if (!m_adapterIface) return;
-    m_adapterIface->call("RemoveDevice", QVariant::fromValue(QDBusObjectPath(address)));
+    m_adapterIface->call("RemoveDevice", QVariant::fromValue(QDBusObjectPath(devicePath)));
     refreshDevices();
 }
 
-void BluetoothManager::trust(const QString &address) {
-    QDBusInterface devIface(BLUEZ_SERVICE, address, "org.bluez.Device1",
+void BluetoothManager::trust(const QString &devicePath) {
+    QDBusInterface devIface(BLUEZ_SERVICE, devicePath, "org.bluez.Device1",
                             QDBusConnection::systemBus(), this);
     devIface.setProperty("Trusted", true);
     refreshDevices();
