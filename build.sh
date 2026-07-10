@@ -838,11 +838,30 @@ LABEL zaios-install
     APPEND initrd=/live/initramfs.img boot=live zaios.media=cdrom zaios.arch=$ARCH zaios.installer=1 quiet
 EOF
 
-    # ISOLINUX binaries (from host's isolinux package)
+    # ISOLINUX binaries - PREFER /usr/lib/ISOLINUX/ (version-matched with isolinux.bin)
+    # to avoid the "failed to load ldlinux.c32" error caused by version mismatch
+    # when isolinux.bin comes from `isolinux` package but .c32 files come from
+    # `syslinux-common` (which may be a different version).
     for f in isolinux.bin ldlinux.c32 libcom32.c32 libutil.c32 vesamenu.c32 menu.c32; do
-        local src="/usr/lib/ISOLINUX/$f"
-        [[ -f "/usr/lib/syslinux/modules/bios/$f" ]] && src="/usr/lib/syslinux/modules/bios/$f"
-        [[ -f "$src" ]] && cp "$src" "$ISO_DIR/boot/isolinux/$f"
+        local src=""
+        # Prefer /usr/lib/ISOLINUX/ - same package as isolinux.bin, guaranteed version match
+        if [[ -f "/usr/lib/ISOLINUX/$f" ]]; then
+            src="/usr/lib/ISOLINUX/$f"
+        elif [[ -f "/usr/lib/syslinux/modules/bios/$f" ]]; then
+            src="/usr/lib/syslinux/modules/bios/$f"
+        elif [[ -f "/usr/lib/syslinux/$f" ]]; then
+            src="/usr/lib/syslinux/$f"
+        fi
+        if [[ -z "$src" ]]; then
+            err "ISOLINUX module '$f' not found!"
+            err "  Looked in: /usr/lib/ISOLINUX/$f"
+            err "            /usr/lib/syslinux/modules/bios/$f"
+            err "            /usr/lib/syslinux/$f"
+            err "Install: sudo apt install isolinux syslinux-common syslinux-utils"
+            die "Cannot build bootable ISO - missing ISOLINUX module"
+        fi
+        cp "$src" "$ISO_DIR/boot/isolinux/$f"
+        ok "Staged ISOLINUX module: $f ($(du -h "$src" | cut -f1))"
     done
 
     # GRUB config (EFI boot, both x86_64-efi and arm64-efi)

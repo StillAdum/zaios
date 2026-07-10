@@ -111,7 +111,7 @@ jobs:
             bc bison flex libelf-dev libssl-dev gawk \
             python3 python3-pip python3-venv \
             pkg-config wget curl git ca-certificates \
-            xorriso grub-pc-bin grub-efi-amd64-bin isolinux syslinux-utils \
+            xorriso grub-pc-bin grub-efi-amd64-bin isolinux syslinux-common syslinux-utils \
             mtools dosfstools squashfs-tools \
             libevdev-dev libudev-dev libdrm-dev libwayland-dev wayland-protocols \
             libbluetooth-dev libpipewire-0.3-dev \
