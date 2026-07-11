@@ -553,7 +553,11 @@ build_rootfs() {
     local busybox_bin="$bb_src/busybox"
     if [[ ! -f "$bb_src/busybox" ]]; then
         log "Building BusyBox"
-        if ! ( cd "$bb_src" && make defconfig && make -j"$JOBS" ); then
+        if ! ( cd "$bb_src" && \
+            make defconfig && \
+            sed -i 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config && \
+            sed -i 's/^CONFIG_FEATURE_TC_INGRESS=y/# CONFIG_FEATURE_TC_INGRESS is not set/' .config && \
+            make -j"$JOBS" ); then
             if command -v busybox >/dev/null 2>&1; then
                 warn "BusyBox source build failed; using host busybox fallback"
                 busybox_bin="$(command -v busybox)"
@@ -678,8 +682,12 @@ build_initramfs() {
     ( cd "$bb_src" && \
         make defconfig && \
         sed -i 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' .config && \
-        # Also disable PAM and other dynamic deps
+        # Disable PAM (dynamic dep)
         sed -i 's/^CONFIG_PAM=y/# CONFIG_PAM is not set/' .config && \
+        # Disable TC — busybox 1.36.1 has a compile error in networking/tc.c
+        # on modern kernels (struct rtattr moved). We don't need TC in initramfs.
+        sed -i 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config && \
+        sed -i 's/^CONFIG_FEATURE_TC_INGRESS=y/# CONFIG_FEATURE_TC_INGRESS is not set/' .config && \
         make clean && \
         make -j"$JOBS" ) || die "Static BusyBox build failed"
 
