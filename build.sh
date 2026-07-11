@@ -864,10 +864,28 @@ fi
 
 # Mount the squashfs
 echo "[zaios-initramfs] Mounting squashfs: $SQFS_PATH"
-mount -t squashfs -o ro "$SQFS_PATH" /newroot || {
-    echo "[zaios-initramfs] FATAL: Failed to mount squashfs. Dropping to shell."
-    exec /bin/sh
+# Create loop device nodes (needed to mount a squashfs FILE inside ISO9660)
+for i in 0 1 2 3 4 5 6 7; do
+    [ -b "/dev/loop$i" ] || mknod -m 660 "/dev/loop$i" b 7 "$i" 2>/dev/null
+done
+# Try mounting with loop first (for squashfs files), then direct (for block devs)
+mount -t squashfs -o ro,loop "$SQFS_PATH" /newroot 2>/dev/null || \
+    mount -t squashfs -o ro "$SQFS_PATH" /newroot 2>/dev/null || {
+    echo "[zaios-initramfs] Direct mount failed, trying losetup..."
+    # Manual losetup approach
+    losetup /dev/loop0 "$SQFS_PATH" 2>/dev/null
+    mount -t squashfs -o ro /dev/loop0 /newroot 2>/dev/null || {
+        echo "[zaios-initramfs] FATAL: Failed to mount squashfs."
+        echo "[zaios-initramfs]   SQFS_PATH=$SQFS_PATH"
+        echo "[zaios-initramfs]   Loop devices:"
+        ls -la /dev/loop* 2>/dev/null
+        echo "[zaios-initramfs]   losetup output:"
+        losetup -a 2>/dev/null
+        echo "[zaios-initramfs] Dropping to shell for debugging."
+        exec /bin/sh
+    }
 }
+echo "[zaios-initramfs] Squashfs mounted successfully."
 
 # Move /dev /proc /sys into newroot
 mount --move /dev  /newroot/dev  2>/dev/null
