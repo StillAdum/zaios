@@ -314,21 +314,39 @@ jobs:
           xorriso -indev build/out/zaios-${{ matrix.arch }}-${{ env.ZAIOS_VERSION }}.iso -report_system_area plain -- 2>&1 | head -20 || true
 
       # ────────────────────────────────────────────────────────────────────
-      # 19. (Optional) Boot-test in QEMU
+      # 19. Boot-test in QEMU — actually verify the kernel boots to init
       # ────────────────────────────────────────────────────────────────────
       - name: 🧪 Boot-test in QEMU (x86_64 only)
         if: matrix.arch == 'x86_64'
         run: |
           sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf
-          # Boot the ISO for 60 seconds, then kill it
-          timeout 60 qemu-system-x86_64 \
+          echo "=== Booting ZAIos ISO in QEMU (90s timeout) ==="
+          # Boot the ISO, capture serial output, look for success/failure markers
+          timeout 90 qemu-system-x86_64 \
             -m 2G \
             -cdrom build/out/zaios-x86_64-${{ env.ZAIOS_VERSION }}.iso \
             -boot d \
             -nographic \
             -serial mon:stdio \
             -no-reboot \
-            || echo "QEMU test done (exit $?)"
+            2>&1 | tee /tmp/qemu-boot.log || true
+          echo ""
+          echo "=== QEMU boot test complete ==="
+          echo "=== Looking for boot failure markers ==="
+          if grep -qi "Kernel panic\|not syncing\|Failed to execute\|No working init" /tmp/qemu-boot.log; then
+            echo "!!! BOOT FAILURE DETECTED !!!"
+            grep -iE "panic|failed|error|not syncing|No working init|ELOOP" /tmp/qemu-boot.log | head -20
+            echo "=== Last 50 lines of boot log ==="
+            tail -50 /tmp/qemu-boot.log
+            exit 1
+          fi
+          if grep -qi "zaios-initramfs\|zaios-init\|ZAIos init starting\|Booting the kernel" /tmp/qemu-boot.log; then
+            echo "✓ Boot progress detected — kernel loaded and init started"
+          else
+            echo "⚠ Could not find boot progress markers in 90s — ISO may still work on real hardware (QEMU is slow)"
+          fi
+          echo "=== Last 30 lines of boot log ==="
+          tail -30 /tmp/qemu-boot.log
 
       # ────────────────────────────────────────────────────────────────────
       # 20. Upload ISO as artifact

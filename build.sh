@@ -666,26 +666,44 @@ build_initramfs() {
     local irfs="$BUILD_DIR/initramfs-$ARCH"
     rm -rf "$irfs"; mkdir -p "$irfs"/{bin,sbin,proc,sys,dev,run,newroot,usr/{bin,sbin}}
 
-    # BusyBox (static)
+    # BusyBox (MUST be static — kernel needs to exec /init via #!/bin/sh
+    # which symlinks to /bin/busybox; dynamic busybox would need ld.so in
+    # initramfs which we don't have, causing ELOOP/-ENOEXEC on boot).
     local bb_src="$SRC_DIR/busybox-$BUSYBOX_VERSION"
     local busybox_bin="$bb_src/busybox"
-    if [[ ! -f "$bb_src/busybox" ]]; then
-        log "Building static BusyBox for initramfs"
-        if ! ( cd "$bb_src" && make defconfig && \
-          sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/' .config && \
-          make -j"$JOBS" ); then
-            if command -v busybox >/dev/null 2>&1; then
-                warn "Static BusyBox source build failed; using host busybox fallback"
-                busybox_bin="$(command -v busybox)"
-            else
-                die "Static BusyBox build failed and no host busybox fallback is available"
-            fi
-        fi
+
+    # ALWAYS force a static rebuild for the initramfs busybox — even if a
+    # dynamic one was built earlier for the rootfs, the initramfs needs static.
+    log "Building static BusyBox for initramfs (force rebuild)"
+    ( cd "$bb_src" && \
+        make defconfig && \
+        sed -i 's/^# CONFIG_STATIC is not set$/CONFIG_STATIC=y/' .config && \
+        # Also disable PAM and other dynamic deps
+        sed -i 's/^CONFIG_PAM=y/# CONFIG_PAM is not set/' .config && \
+        make clean && \
+        make -j"$JOBS" ) || die "Static BusyBox build failed"
+
+    # Verify busybox is actually static
+    local bb_file_info
+    bb_file_info="$(file "$busybox_bin" 2>/dev/null || echo 'unknown')"
+    ok "BusyBox file type: $bb_file_info"
+    if echo "$bb_file_info" | grep -qi "dynamically linked"; then
+        err "FATAL: BusyBox is still dynamically linked after static rebuild"
+        err "This will cause 'Failed to execute /init (error -40)' on boot"
+        die "Cannot build bootable initramfs without static busybox"
     fi
+
     cp "$busybox_bin" "$irfs/bin/busybox"
     chmod +x "$irfs/bin/busybox"
+    # Create relative symlinks for all applets (sh, mount, switch_root, etc.)
+    # Using RELATIVE symlinks (busybox, not /bin/busybox) avoids any absolute
+    # path resolution issues during early boot.
     for applet in $("$irfs/bin/busybox" --list); do
-        ln -sf /bin/busybox "$irfs/bin/$applet" 2>/dev/null || true
+        ln -sf busybox "$irfs/bin/$applet" 2>/dev/null || true
+    done
+    # Also create /sbin symlinks for init-style applets
+    for applet in init switch_root mdev modprobe; do
+        ln -sf ../bin/busybox "$irfs/sbin/$applet" 2>/dev/null || true
     done
 
     # Init script (finds squashfs on the boot media, mounts, switch_root)
