@@ -720,50 +720,101 @@ build_initramfs() {
 # ZAIos initramfs init — finds the squashfs on boot media and switch_roots.
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-mount -t proc     none /proc
-mount -t sysfs    none /sys
-mount -t devtmpfs none /dev  2>/dev/null || mdev -s
+mount -t proc     proc /proc
+mount -t sysfs    sysfs /sys
 
-# Load common CD/USB/storage drivers (in case they're modules, not built-in)
+# Try devtmpfs (kernel auto-creates device nodes). If it fails, manually
+# populate /dev with mknod for common block devices.
+if ! mount -t devtmpfs devtmpfs /dev 2>/dev/null; then
+    echo "[zaios-initramfs] devtmpfs mount failed, manually creating device nodes"
+    # Create essential character devices
+    [ -c /dev/null ] || mknod -m 666 /dev/null c 1 3
+    [ -c /dev/console ] || mknod -m 600 /dev/console c 5 1
+    [ -c /dev/tty ] || mknod -m 666 /dev/tty c 5 0
+    # Create block device nodes for common storage (we'll also scan /sys/block)
+    # Major 11 = SCSI CD-ROM (sr0, sr1...)
+    [ -b /dev/sr0 ] || mknod -m 660 /dev/sr0 b 11 0
+    [ -b /dev/sr1 ] || mknod -m 660 /dev/sr1 b 11 1
+    # Major 8 = SCSI disk (sda, sdb...)
+    [ -b /dev/sda ] || mknod -m 660 /dev/sda b 8 0
+    [ -b /dev/sda1 ] || mknod -m 660 /dev/sda1 b 8 1
+    [ -b /dev/sdb ] || mknod -m 660 /dev/sdb b 8 16
+    [ -b /dev/sdb1 ] || mknod -m 660 /dev/sdb1 b 8 17
+fi
+
+# Also try mdev for any remaining devices
+mdev -s 2>/dev/null
+
+# Load common storage drivers (in case they're modules)
 for mod in sr_mod cdrom isofs squashfs overlay sd_mod usb-storage uas \
-           ahci nvme vfat ext4 iso9660; do
+           ahci nvme vfat ext4 iso9660 ehci-pci ohci-pci uhci-hcd \
+           xhci-hcd ata_piix pata_acpi; do
     modprobe "$mod" 2>/dev/null
 done
-# Wait for devices to settle
-sleep 2
+
+# Wait for devices to settle (USB enumeration takes time)
+sleep 3
+
+echo "[zaios-initramfs] === Device detection debug ==="
+echo "[zaios-initramfs] /proc/partitions:"
+cat /proc/partitions 2>/dev/null
+echo "[zaios-initramfs] /sys/block entries:"
+ls /sys/block 2>/dev/null
+echo "[zaios-initramfs] /dev block devices:"
+ls -la /dev/sr* /dev/sd* /dev/mmcblk* /dev/nvme* 2>/dev/null
+echo "[zaios-initramfs] === End device detection ==="
+
+# If /sys/block has entries but /dev doesn't have nodes, create them
+if [ -d /sys/block ]; then
+    for block in /sys/block/*; do
+        devname="$(basename "$block")"
+        case "$devname" in
+            sr*|sd*|mmcblk*|nvme*)
+                if [ ! -b "/dev/$devname" ]; then
+                    major="$(cat "$block/dev" 2>/dev/null | cut -d: -f1)"
+                    minor="$(cat "$block/dev" 2>/dev/null | cut -d: -f2)"
+                    if [ -n "$major" ] && [ -n "$minor" ]; then
+                        mknod -m 660 "/dev/$devname" b "$major" "$minor" 2>/dev/null
+                        echo "[zaios-initramfs] Created /dev/$devname ($major:$minor)"
+                    fi
+                fi
+                # Also create partition nodes
+                for part in "$block"/"$devname"*; do
+                    partname="$(basename "$part")"
+                    if [ "$partname" != "$devname" ] && [ ! -b "/dev/$partname" ]; then
+                        major="$(cat "$part/dev" 2>/dev/null | cut -d: -f1)"
+                        minor="$(cat "$part/dev" 2>/dev/null | cut -d: -f2)"
+                        if [ -n "$major" ] && [ -n "$minor" ]; then
+                            mknod -m 660 "/dev/$partname" b "$major" "$minor" 2>/dev/null
+                        fi
+                    fi
+                done
+                ;;
+        esac
+    done
+fi
 
 echo "[zaios-initramfs] Searching for ZAIos boot media..."
 
 # Look for the squashfs on every block device.
-# Try multiple filesystem types — ISO9660 for CD-ROMs, vfat/ext4 for USB.
 BOOT_DEV=""
 SQFS_PATH=""
 mkdir -p /mnt/probe
 
-# Function: try to mount a device and look for the squashfs
 probe_dev() {
     local dev="$1"
     [ -b "$dev" ] || return 1
-    # Try ISO9660 first (CD-ROM), then vfat (USB), then ext4, then auto
     for fstype in iso9660 vfat ext4 auto; do
         if mount -t "$fstype" -o ro "$dev" /mnt/probe 2>/dev/null; then
-            # Check multiple possible squashfs locations
             for path in zaios/rootfs.squashfs live/rootfs.squashfs \
                         casper/filesystem.squashfs rootfs.squashfs; do
                 if [ -f "/mnt/probe/$path" ]; then
                     BOOT_DEV="$dev"
                     SQFS_PATH="/mnt/probe/$path"
-                    echo "[zaios-initramfs] Found ZAIos media at $dev (squashfs at $path)"
+                    echo "[zaios-initramfs] Found ZAIos media at $dev (squashfs at $path, fstype=$fstype)"
                     return 0
                 fi
             done
-            # Also check for boot/vmlinuz as a fallback marker
-            if [ -f /mnt/probe/boot/vmlinuz ] || [ -f /mnt/probe/live/vmlinuz ]; then
-                BOOT_DEV="$dev"
-                echo "[zaios-initramfs] Found boot media at $dev (no squashfs found, but vmlinuz present)"
-                umount /mnt/probe 2>/dev/null
-                return 1
-            fi
             umount /mnt/probe 2>/dev/null
         fi
     done
@@ -775,12 +826,25 @@ for dev in /dev/sr* /dev/sd* /dev/mmcblk*p* /dev/nvme*p* /dev/disk/by-uuid/* /de
     probe_dev "$dev" && break
 done
 
-# If still not found, try a broader search with mdev-style device creation
+# Retry after delay if not found
 if [ -z "$BOOT_DEV" ]; then
-    echo "[zaios-initramfs] First scan didn't find media. Waiting 3s and retrying..."
-    sleep 3
-    # Trigger device node creation
+    echo "[zaios-initramfs] First scan didn't find media. Waiting 5s and retrying..."
+    sleep 5
     mdev -s 2>/dev/null
+    # Re-scan /sys/block for new devices
+    for block in /sys/block/*; do
+        devname="$(basename "$block")"
+        case "$devname" in
+            sr*|sd*|mmcblk*|nvme*)
+                if [ ! -b "/dev/$devname" ]; then
+                    major="$(cat "$block/dev" 2>/dev/null | cut -d: -f1)"
+                    minor="$(cat "$block/dev" 2>/dev/null | cut -d: -f2)"
+                    [ -n "$major" ] && [ -n "$minor" ] && \
+                        mknod -m 660 "/dev/$devname" b "$major" "$minor" 2>/dev/null
+                fi
+                ;;
+        esac
+    done
     for dev in /dev/sr* /dev/sd* /dev/mmcblk*p* /dev/nvme*p*; do
         probe_dev "$dev" && break
     done
@@ -788,8 +852,12 @@ fi
 
 if [ -z "$BOOT_DEV" ] || [ -z "$SQFS_PATH" ]; then
     echo "[zaios-initramfs] FATAL: No ZAIos boot media found."
-    echo "[zaios-initramfs] Available block devices:"
+    echo "[zaios-initramfs] Final /proc/partitions:"
+    cat /proc/partitions 2>/dev/null
+    echo "[zaios-initramfs] Final /dev block devices:"
     ls -la /dev/sr* /dev/sd* /dev/mmcblk* /dev/nvme* 2>/dev/null
+    echo "[zaios-initramfs] Final /sys/block:"
+    ls /sys/block 2>/dev/null
     echo "[zaios-initramfs] Dropping to shell for debugging."
     exec /bin/sh
 fi
