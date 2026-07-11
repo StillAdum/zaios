@@ -724,32 +724,82 @@ mount -t proc     none /proc
 mount -t sysfs    none /sys
 mount -t devtmpfs none /dev  2>/dev/null || mdev -s
 
+# Load common CD/USB/storage drivers (in case they're modules, not built-in)
+for mod in sr_mod cdrom isofs squashfs overlay sd_mod usb-storage uas \
+           ahci nvme vfat ext4 iso9660; do
+    modprobe "$mod" 2>/dev/null
+done
+# Wait for devices to settle
+sleep 2
+
 echo "[zaios-initramfs] Searching for ZAIos boot media..."
 
-# We look for a partition with a /zaios/ marker file, or a CD-ROM with
-# /zaios/rootfs.squashfs.
+# Look for the squashfs on every block device.
+# Try multiple filesystem types — ISO9660 for CD-ROMs, vfat/ext4 for USB.
 BOOT_DEV=""
-for dev in /dev/disk/by-uuid/* /dev/sr* /dev/sd* /dev/mmcblk*p* /dev/nvme*p*; do
-    [ -b "$dev" ] || continue
-    mkdir -p /mnt/probe
-    if mount -o ro "$dev" /mnt/probe 2>/dev/null; then
-        if [ -f /mnt/probe/zaios/rootfs.squashfs ] || \
-           [ -f /mnt/probe/boot/vmlinuz ]; then
-            BOOT_DEV="$dev"
-            echo "[zaios-initramfs] Found ZAIos media at $dev"
-            break
+SQFS_PATH=""
+mkdir -p /mnt/probe
+
+# Function: try to mount a device and look for the squashfs
+probe_dev() {
+    local dev="$1"
+    [ -b "$dev" ] || return 1
+    # Try ISO9660 first (CD-ROM), then vfat (USB), then ext4, then auto
+    for fstype in iso9660 vfat ext4 auto; do
+        if mount -t "$fstype" -o ro "$dev" /mnt/probe 2>/dev/null; then
+            # Check multiple possible squashfs locations
+            for path in zaios/rootfs.squashfs live/rootfs.squashfs \
+                        casper/filesystem.squashfs rootfs.squashfs; do
+                if [ -f "/mnt/probe/$path" ]; then
+                    BOOT_DEV="$dev"
+                    SQFS_PATH="/mnt/probe/$path"
+                    echo "[zaios-initramfs] Found ZAIos media at $dev (squashfs at $path)"
+                    return 0
+                fi
+            done
+            # Also check for boot/vmlinuz as a fallback marker
+            if [ -f /mnt/probe/boot/vmlinuz ] || [ -f /mnt/probe/live/vmlinuz ]; then
+                BOOT_DEV="$dev"
+                echo "[zaios-initramfs] Found boot media at $dev (no squashfs found, but vmlinuz present)"
+                umount /mnt/probe 2>/dev/null
+                return 1
+            fi
+            umount /mnt/probe 2>/dev/null
         fi
-        umount /mnt/probe 2>/dev/null
-    fi
+    done
+    return 1
+}
+
+# Scan all possible boot devices
+for dev in /dev/sr* /dev/sd* /dev/mmcblk*p* /dev/nvme*p* /dev/disk/by-uuid/* /dev/disk/by-label/*; do
+    probe_dev "$dev" && break
 done
 
+# If still not found, try a broader search with mdev-style device creation
 if [ -z "$BOOT_DEV" ]; then
-    echo "[zaios-initramfs] FATAL: No ZAIos boot media found. Dropping to shell."
+    echo "[zaios-initramfs] First scan didn't find media. Waiting 3s and retrying..."
+    sleep 3
+    # Trigger device node creation
+    mdev -s 2>/dev/null
+    for dev in /dev/sr* /dev/sd* /dev/mmcblk*p* /dev/nvme*p*; do
+        probe_dev "$dev" && break
+    done
+fi
+
+if [ -z "$BOOT_DEV" ] || [ -z "$SQFS_PATH" ]; then
+    echo "[zaios-initramfs] FATAL: No ZAIos boot media found."
+    echo "[zaios-initramfs] Available block devices:"
+    ls -la /dev/sr* /dev/sd* /dev/mmcblk* /dev/nvme* 2>/dev/null
+    echo "[zaios-initramfs] Dropping to shell for debugging."
     exec /bin/sh
 fi
 
 # Mount the squashfs
-mount -t squashfs -o ro /mnt/probe/zaios/rootfs.squashfs /newroot
+echo "[zaios-initramfs] Mounting squashfs: $SQFS_PATH"
+mount -t squashfs -o ro "$SQFS_PATH" /newroot || {
+    echo "[zaios-initramfs] FATAL: Failed to mount squashfs. Dropping to shell."
+    exec /bin/sh
+}
 
 # Move /dev /proc /sys into newroot
 mount --move /dev  /newroot/dev  2>/dev/null
@@ -757,9 +807,10 @@ mount --move /proc /newroot/proc 2>/dev/null
 mount --move /sys  /newroot/sys  2>/dev/null
 
 # Pass boot device to real init
+mkdir -p /newroot/etc/zaios
 echo "BOOT_DEV=$BOOT_DEV" > /newroot/etc/zaios/boot-dev
 
-# Cleanup probe (it's now under /newroot/mnt/probe; will be unmounted by init)
+echo "[zaios-initramfs] Switching to real root..."
 exec switch_root /newroot /sbin/zaios-init
 INITSCRIPT
     chmod +x "$irfs/init"
