@@ -779,16 +779,36 @@ build_iso() {
 
     [[ ! -f "$sqfs" ]] && die "rootfs squashfs missing: $sqfs"
     if [[ ! -f "$kimg" ]]; then
+        # Kernel was wiped from rootfs by build_rootfs's rm -rf. Look in the
+        # kernel build tree instead and re-stage it.
         local fallback_kimg=""
-        fallback_kimg="$(find "$BUILD_DIR/linux-$ARCH" -path '*/boot/bzImage' -type f 2>/dev/null | head -n 1 || true)"
+        # Try the standard kernel build path first
+        for candidate in \
+            "$BUILD_DIR/linux-build-$ARCH/arch/$(kernel_arch)/boot/bzImage" \
+            "$BUILD_DIR/linux-$ARCH/arch/$(kernel_arch)/boot/bzImage" \
+            "$ROOTFS_DIR/boot/vmlinuz" \
+            "$ROOTFS_DIR/boot/vmlinuz-$ARCH"; do
+            if [[ -f "$candidate" ]]; then
+                fallback_kimg="$candidate"
+                break
+            fi
+        done
+        # Fallback: search the build tree
+        if [[ -z "$fallback_kimg" ]]; then
+            fallback_kimg="$(find "$BUILD_DIR" -path '*/boot/bzImage' -type f 2>/dev/null | head -n 1 || true)"
+        fi
         if [[ -n "$fallback_kimg" ]]; then
-            warn "Kernel image missing from rootfs; staging $fallback_kimg"
-            mkdir -p "$(dirname "$kimg")"
+            warn "Kernel image missing from rootfs; re-staging from $fallback_kimg"
+            mkdir -p "$(dirname "$kimg")" "$ROOTFS_DIR/boot"
             cp "$fallback_kimg" "$kimg"
+            cp "$fallback_kimg" "$ROOTFS_DIR/boot/vmlinuz"
             ln -sf "$(basename "$kimg")" "$ROOTFS_DIR/boot/vmlinuz"
+            ok "Kernel re-staged: $kimg"
         else
-            warn "kernel image missing: $kimg — ISO will be assembled without /live/vmlinuz"
-            kimg=""
+            err "kernel image missing: $kimg"
+            err "  Searched: $BUILD_DIR/linux-build-$ARCH/arch/$(kernel_arch)/boot/bzImage"
+            err "           $BUILD_DIR/linux-$ARCH/arch/$(kernel_arch)/boot/bzImage"
+            die "Cannot build bootable ISO — kernel bzImage not found"
         fi
     fi
     if [[ ! -f "$irfs" ]]; then
