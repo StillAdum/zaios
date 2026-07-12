@@ -594,9 +594,23 @@ stage_runtime_services_into_rootfs() {
     local staged_libs=()
     for bin in "${all_bins[@]}"; do
         while IFS= read -r line; do
-            # ldd output format: "      libxxx.so.x => /path/to/libxxx.so.x (0xaddr)"
-            local libpath
-            libpath="$(echo "$line" | sed -n 's/.*=> \(/\([^)]*\)\).*/\1/p')"
+            # ldd output format: "    libxxx.so.x => /path/to/libxxx.so.x (0xaddr)"
+            # Extract the path between "=> " and " ("
+            local libpath=""
+            case "$line" in
+                *"=> "*)
+                    # Strip everything up to "=> ", then strip " (0x...)" suffix
+                    libpath="${line#*=> }"
+                    libpath="${libpath% (*}"
+                    libpath="${libpath% }"
+                    ;;
+                *"/"*)
+                    # Lines like "    /lib64/ld-linux-x86-64.so.2 (0x...)"
+                    libpath="${line# *}"
+                    libpath="${libpath% (*}"
+                    libpath="${libpath% }"
+                    ;;
+            esac
             [[ -z "$libpath" ]] && continue
             [[ -f "$libpath" ]] || continue
             # Skip if already staged
