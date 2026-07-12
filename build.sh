@@ -580,64 +580,48 @@ stage_runtime_services_into_rootfs() {
     done
 
     # ── Shared libraries needed by the binaries ─────────────────────────────
-    log "Staging shared library dependencies"
-    mkdir -p "$ROOTFS_DIR/usr/lib/$multiarch" "$ROOTFS_DIR/lib/$multiarch"
-    # Use ldd to find all .so deps for each staged binary, then copy them
-    local all_bins=()
-    for name in "${!BINARIES[@]}"; do
-        local src="${BINARIES[$name]}"
-        [[ -f "$src" ]] && all_bins+=("$src")
-    done
-    # Also include the ZAIos shell and Qt6 libs
-    [[ -f "$ROOTFS_DIR/usr/bin/zaios-shell" ]] && all_bins+=("$ROOTFS_DIR/usr/bin/zaios-shell")
+    # Instead of parsing ldd output (which misses some transitive deps and
+    # symlinks), just copy the ENTIRE multiarch lib directory. This is what
+    # most live CDs do — bigger rootfs but guaranteed to have every lib.
+    log "Staging shared libraries (bulk copy from host)"
+    mkdir -p "$ROOTFS_DIR/usr/lib/$multiarch" "$ROOTFS_DIR/lib/$multiarch" "$ROOTFS_DIR/lib64"
 
-    local staged_libs=()
-    for bin in "${all_bins[@]}"; do
-        while IFS= read -r line; do
-            # ldd output format: "    libxxx.so.x => /path/to/libxxx.so.x (0xaddr)"
-            # Extract the path between "=> " and " ("
-            local libpath=""
-            case "$line" in
-                *"=> "*)
-                    # Strip everything up to "=> ", then strip " (0x...)" suffix
-                    libpath="${line#*=> }"
-                    libpath="${libpath% (*}"
-                    libpath="${libpath% }"
-                    ;;
-                *"/"*)
-                    # Lines like "    /lib64/ld-linux-x86-64.so.2 (0x...)"
-                    libpath="${line# *}"
-                    libpath="${libpath% (*}"
-                    libpath="${libpath% }"
-                    ;;
-            esac
-            [[ -z "$libpath" ]] && continue
-            [[ -f "$libpath" ]] || continue
-            # Skip if already staged
-            local libname
-            libname="$(basename "$libpath")"
-            if [[ " ${staged_libs[*]} " != *" $libname "* ]]; then
-                staged_libs+=("$libname")
-                # Copy to matching dir in rootfs
-                local dest
-                case "$libpath" in
-                    /usr/lib/$multiarch/*) dest="$ROOTFS_DIR/usr/lib/$multiarch" ;;
-                    /lib/$multiarch/*)     dest="$ROOTFS_DIR/lib/$multiarch" ;;
-                    /usr/lib/*)            dest="$ROOTFS_DIR/usr/lib" ;;
-                    /lib/*)                dest="$ROOTFS_DIR/lib" ;;
-                    /lib64/*)              dest="$ROOTFS_DIR/lib64" ;;
-                    *)                     dest="$ROOTFS_DIR/usr/lib" ;;
-                esac
-                mkdir -p "$dest"
-                cp -a "$libpath" "$dest/" 2>/dev/null || true
-                # Also copy symlinks (e.g. libfoo.so.1 -> libfoo.so.1.2.3)
-                for symlink in "${libpath%.*}".*; do
-                    [[ -L "$symlink" ]] && cp -a "$symlink" "$dest/" 2>/dev/null || true
-                done
-            fi
-        done < <(ldd "$bin" 2>/dev/null)
+    # Copy all shared libraries from the host's multiarch directories
+    if [[ -d "/usr/lib/$multiarch" ]]; then
+        cp -a /usr/lib/$multiarch/*.so* "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
+        # Also copy subdirectories that contain libraries (e.g., pipewire, bluetooth)
+        for subdir in pipewire bluetooth gstreamer dri xorg pulseaudio alsa; do
+            [[ -d "/usr/lib/$multiarch/$subdir" ]] && \
+                cp -a "/usr/lib/$multiarch/$subdir" "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
+        done
+    fi
+    if [[ -d "/lib/$multiarch" ]]; then
+        cp -a /lib/$multiarch/*.so* "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
+        # Copy systemd and udev directories
+        for subdir in systemd udev modprobe.d; do
+            [[ -d "/lib/$multiarch/$subdir" ]] && \
+                cp -a "/lib/$multiarch/$subdir" "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
+        done
+    fi
+    # Copy /lib64 (ld-linux dynamic linker)
+    [[ -d /lib64 ]] && cp -a /lib64/*.so* "$ROOTFS_DIR/lib64/" 2>/dev/null || true
+    # Copy /usr/lib (non-multiarch libs)
+    [[ -d /usr/lib ]] && cp -a /usr/lib/*.so* "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
+
+    # Also copy the dynamic linker explicitly (critical — without it NOTHING runs)
+    for ld in /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-x86-64.so.2 \
+               /lib/$multiarch/ld-linux-x86-64.so.2; do
+        if [[ -f "$ld" ]]; then
+            mkdir -p "$ROOTFS_DIR$(dirname "$ld")"
+            cp -a "$ld" "$ROOTFS_DIR$(dirname "$ld")/" 2>/dev/null || true
+        fi
     done
-    ok "Staged ${#staged_libs[@]} shared libraries"
+
+    # Count what we staged
+    local lib_count
+    lib_count="$(find "$ROOTFS_DIR/usr/lib" "$ROOTFS_DIR/lib" "$ROOTFS_DIR/lib64" \
+        -name '*.so*' -type f 2>/dev/null | wc -l)"
+    ok "Staged $lib_count shared library files"
 
     # ── Qt6 runtime (needed by zaios-shell) ─────────────────────────────────
     log "Staging Qt6 runtime libraries"

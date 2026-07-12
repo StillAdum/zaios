@@ -243,6 +243,12 @@ int main(int argc, char **argv) {
     /* Step 6: bring up loopback interface */
     system("ip link set lo up 2>/dev/null || ifconfig lo up 2>/dev/null");
 
+    /* Step 6b: Create /run/zaios with world-writable permissions so that
+     * unprivileged services (pipewire, wireplumber, zaios-spotify) running
+     * as uid 1000 can create their Unix sockets there. */
+    mkdir("/run/zaios", 0777);
+    chmod("/run/zaios", 0777);
+
     /* Step 7: register & start services */
     ZAIOS_LOG(LOG_INFO, "starting services");
 
