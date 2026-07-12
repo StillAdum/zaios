@@ -537,6 +537,154 @@ stage_host_glibc_into_rootfs() {
     ok "Host glibc runtime staged"
 }
 
+# Stage runtime system services (dbus, pipewire, wireplumber, cage, etc.)
+# from the host into the rootfs. These are needed by zaios-init to start
+# the ZAIos desktop.
+stage_runtime_services_into_rootfs() {
+    log "Staging runtime system services into rootfs"
+
+    local multiarch=""
+    multiarch="$(gcc -print-multiarch 2>/dev/null || true)"
+
+    # ── Binaries ────────────────────────────────────────────────────────────
+    # Map service name -> host binary path
+    declare -A BINARIES=(
+        [dbus-daemon]="/usr/bin/dbus-daemon"
+        [pipewire]="/usr/bin/pipewire"
+        [wireplumber]="/usr/bin/wireplumber"
+        [cage]="/usr/bin/cage"
+        [mpv]="/usr/bin/mpv"
+        [wpa_supplicant]="/usr/sbin/wpa_supplicant"
+        [bluetoothd]="/usr/libexec/bluetooth/bluetoothd"
+        [NetworkManager]="/usr/sbin/NetworkManager"
+        [udevadm]="/usr/bin/udevadm"
+        [udevd]="/usr/lib/systemd/systemd-udevd"
+    )
+
+    for name in "${!BINARIES[@]}"; do
+        local src="${BINARIES[$name]}"
+        local dest_dir
+        case "$src" in
+            /usr/sbin/*)    dest_dir="$ROOTFS_DIR/usr/sbin" ;;
+            /usr/libexec/*) dest_dir="$ROOTFS_DIR/usr/libexec" ;;
+            /usr/lib/*)     dest_dir="$ROOTFS_DIR/usr/lib" ;;
+            *)              dest_dir="$ROOTFS_DIR/usr/bin" ;;
+        esac
+        mkdir -p "$dest_dir"
+        if [[ -f "$src" ]]; then
+            cp -a "$src" "$dest_dir/" 2>/dev/null && \
+                ok "Staged binary: $name ($src)"
+        else
+            warn "Binary not found on host: $name ($src) — install the package"
+        fi
+    done
+
+    # ── Shared libraries needed by the binaries ─────────────────────────────
+    log "Staging shared library dependencies"
+    mkdir -p "$ROOTFS_DIR/usr/lib/$multiarch" "$ROOTFS_DIR/lib/$multiarch"
+    # Use ldd to find all .so deps for each staged binary, then copy them
+    local all_bins=()
+    for name in "${!BINARIES[@]}"; do
+        local src="${BINARIES[$name]}"
+        [[ -f "$src" ]] && all_bins+=("$src")
+    done
+    # Also include the ZAIos shell and Qt6 libs
+    [[ -f "$ROOTFS_DIR/usr/bin/zaios-shell" ]] && all_bins+=("$ROOTFS_DIR/usr/bin/zaios-shell")
+
+    local staged_libs=()
+    for bin in "${all_bins[@]}"; do
+        while IFS= read -r line; do
+            # ldd output format: "      libxxx.so.x => /path/to/libxxx.so.x (0xaddr)"
+            local libpath
+            libpath="$(echo "$line" | sed -n 's/.*=> \(/\([^)]*\)\).*/\1/p')"
+            [[ -z "$libpath" ]] && continue
+            [[ -f "$libpath" ]] || continue
+            # Skip if already staged
+            local libname
+            libname="$(basename "$libpath")"
+            if [[ " ${staged_libs[*]} " != *" $libname "* ]]; then
+                staged_libs+=("$libname")
+                # Copy to matching dir in rootfs
+                local dest
+                case "$libpath" in
+                    /usr/lib/$multiarch/*) dest="$ROOTFS_DIR/usr/lib/$multiarch" ;;
+                    /lib/$multiarch/*)     dest="$ROOTFS_DIR/lib/$multiarch" ;;
+                    /usr/lib/*)            dest="$ROOTFS_DIR/usr/lib" ;;
+                    /lib/*)                dest="$ROOTFS_DIR/lib" ;;
+                    /lib64/*)              dest="$ROOTFS_DIR/lib64" ;;
+                    *)                     dest="$ROOTFS_DIR/usr/lib" ;;
+                esac
+                mkdir -p "$dest"
+                cp -a "$libpath" "$dest/" 2>/dev/null || true
+                # Also copy symlinks (e.g. libfoo.so.1 -> libfoo.so.1.2.3)
+                for symlink in "${libpath%.*}".*; do
+                    [[ -L "$symlink" ]] && cp -a "$symlink" "$dest/" 2>/dev/null || true
+                done
+            fi
+        done < <(ldd "$bin" 2>/dev/null)
+    done
+    ok "Staged ${#staged_libs[@]} shared libraries"
+
+    # ── Qt6 runtime (needed by zaios-shell) ─────────────────────────────────
+    log "Staging Qt6 runtime libraries"
+    local qt_lib_dir=""
+    local qt_plugin_dir=""
+    local qt_qml_dir=""
+    if pkg-config --exists Qt6Core 2>/dev/null; then
+        qt_lib_dir="$(pkg-config --variable=libdir Qt6Core 2>/dev/null || echo "/usr/lib/$multiarch")"
+        qt_plugin_dir="$(pkg-config --variable=plugin_dir Qt6Core 2>/dev/null || echo "/usr/lib/$multiarch/qt6/plugins")"
+        qt_qml_dir="$(pkg-config --variable=qml_install_dir Qt6Quick 2>/dev/null || echo "/usr/lib/$multiarch/qt6/qml")"
+    else
+        qt_lib_dir="/usr/lib/$multiarch"
+        qt_plugin_dir="/usr/lib/$multiarch/qt6/plugins"
+        qt_qml_dir="/usr/lib/$multiarch/qt6/qml"
+    fi
+    mkdir -p "$ROOTFS_DIR/usr/lib/qt6/plugins" "$ROOTFS_DIR/usr/lib/qt6/qml"
+    # Copy Qt6 shared libs
+    for lib in libQt6Core libQt6Gui libQt6Quick libQt6Qml libQt6Network libQt6DBus \
+               libQt6Multimedia libQt6Bluetooth libQt6WaylandClient libQt6OpenGL \
+               libQt6Svg libQt6QuickControls2 libQt6QuickLayouts libQt6QuickTemplates2 \
+               libQt6QuickParticles libQt6QmlModels libQt6QmlWorkerScript libQt6WaylandCompositor; do
+        for f in "$qt_lib_dir/$lib".so*; do
+            [[ -f "$f" ]] && cp -a "$f" "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
+        done
+    done
+    # Copy Qt6 plugins (platforms, wayland, image formats)
+    for pdir in platforms wayland-shell-integration wayland-decoration-client \
+                wayland-graphics-integration-client imageformats; do
+        [[ -d "$qt_plugin_dir/$pdir" ]] && cp -a "$qt_plugin_dir/$pdir" \
+            "$ROOTFS_DIR/usr/lib/qt6/plugins/" 2>/dev/null || true
+    done
+    # Copy Qt6 QML modules
+    for mod in QtQuick QtQuickControls2 QtQuick/Layouts QtQuick/Window QtQuick/Particles \
+               QtQml QtQml/Models QtWayland; do
+        [[ -d "$qt_qml_dir/$mod" ]] && cp -a "$qt_qml_dir/$mod" \
+            "$ROOTFS_DIR/usr/lib/qt6/qml/" 2>/dev/null || true
+    done
+    ok "Qt6 runtime staged"
+
+    # ── DBus config ─────────────────────────────────────────────────────────
+    mkdir -p "$ROOTFS_DIR/etc/dbus-1" "$ROOTFS_DIR/usr/share/dbus-1"
+    [[ -f /etc/dbus-1/system.conf ]] && cp /etc/dbus-1/system.conf "$ROOTFS_DIR/etc/dbus-1/"
+    [[ -d /usr/share/dbus-1 ]] && cp -a /usr/share/dbus-1/* "$ROOTFS_DIR/usr/share/dbus-1/" 2>/dev/null || true
+
+    # ── Bluetooth config ────────────────────────────────────────────────────
+    mkdir -p "$ROOTFS_DIR/etc/bluetooth"
+    [[ -f /etc/bluetooth/main.conf ]] && cp /etc/bluetooth/main.conf "$ROOTFS_DIR/etc/bluetooth/"
+
+    # ── Runtime directories ─────────────────────────────────────────────────
+    mkdir -p "$ROOTFS_DIR/run/zaios" "$ROOTFS_DIR/var/lib/zaios" "$ROOTFS_DIR/var/run"
+    chmod 1777 "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/var/tmp" 2>/dev/null || true
+
+    # ── /etc/passwd and /etc/group (ensure zaios user exists) ───────────────
+    grep -q "^zaios:" "$ROOTFS_DIR/etc/passwd" 2>/dev/null || \
+        echo "zaios:x:1000:1000:ZAIos User:/home/zaios:/bin/sh" >> "$ROOTFS_DIR/etc/passwd"
+    grep -q "^zaios:" "$ROOTFS_DIR/etc/group" 2>/dev/null || \
+        echo "zaios:x:1000:" >> "$ROOTFS_DIR/etc/group"
+
+    ok "Runtime services staged into rootfs"
+}
+
 # ─── Step 6: assemble rootfs ───────────────────────────────────────────────
 build_rootfs() {
     section "Assembling rootfs for $ARCH"
@@ -590,6 +738,7 @@ build_rootfs() {
     stage_kernel_into_rootfs
     build_init
     build_shell
+    stage_runtime_services_into_rootfs
 
     # Stage yt-dlp (Python script)
     local ytdlp_src="$SRC_DIR/yt-dlp-$YT_DLP_VERSION"

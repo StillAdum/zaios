@@ -146,6 +146,21 @@ jobs:
           elif [[ "${{ matrix.arch }}" == "arm" ]]; then
             sudo apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
           fi
+          # Runtime services to stage into the rootfs (needed by zaios-init)
+          sudo apt-get install -y --no-install-recommends \
+            cage pipewire pipewire-audio-client-libraries wireplumber \
+            network-manager bluez wpasupplicant \
+            dbus dbus-x11 udev systemd \
+            mpv yt-dlp \
+            qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtquick-templates \
+            qml6-module-qtquick-particles \
+            qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+            libqt6core6 libqt6gui6 libqt6quick6 libqt6qml6 \
+            libqt6quickcontrols2-6 libqt6quicklayouts6 libqt6multimedia6 \
+            libqt6bluetooth6 libqt6waylandclient6 libqt6waylandcompositor6 \
+            libqt6svg6 libqt6opengl6 libqt6dbus6 libqt6network6 \
+            qt6-wayland qt6-wayland-dev
           # Calamares binary (staged into ISO for installer)
           sudo apt-get install -y --no-install-recommends calamares || true
       - name: ✅ Verify tools
