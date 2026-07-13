@@ -254,6 +254,11 @@ int main(int argc, char **argv) {
     setenv("XDG_RUNTIME_DIR", "/run", 1);
     setenv("HOME", "/root", 1);
     setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin:/usr/lib/zaios", 1);
+    /* Also create /root/.local/state for wireplumber state */
+    mkdir("/root/.local", 0755);
+    mkdir("/root/.local/state", 0755);
+    /* Make /run fully writable (pipewire needs to create /run/pipewire-0.lock) */
+    chmod("/run", 0777);
 
     /* Step 7: register & start services */
     ZAIOS_LOG(LOG_INFO, "starting services");
@@ -263,7 +268,10 @@ int main(int argc, char **argv) {
     uid_t zaios_uid = pw ? pw->pw_uid : 1000;
     gid_t zaios_gid = pw ? pw->pw_gid : 1000;
 
-    /* DBus first — everything talks to it */
+    /* DBus first — everything talks to it.
+     * Run ALL services as root for now — we can drop privileges later
+     * once we verify the system boots. Running as uid 1000 causes
+     * permission denied errors on /run, /root, etc. */
     const char *dbus_args[] = {"--system", "--nofork", "--nopidfile", NULL};
     zaios_service_register("dbus", "/usr/bin/dbus-daemon",
                           dbus_args, 1, 0, 0, 0);
@@ -278,15 +286,15 @@ int main(int argc, char **argv) {
     zaios_service_register("bluetooth", "/usr/libexec/bluetooth/bluetoothd",
                           bt_args, 1, 0, 0, 0);
 
-    /* Pipewire (audio) */
+    /* Pipewire (audio) — run as root to avoid /run permission issues */
     const char *pw_args[] = {NULL};
     zaios_service_register("pipewire", "/usr/bin/pipewire",
-                          pw_args, 1, 0, zaios_uid, zaios_gid);
+                          pw_args, 1, 0, 0, 0);
 
-    /* Wireplumber (pipewire session manager) */
+    /* Wireplumber (pipewire session manager) — run as root */
     const char *wp_args[] = {NULL};
     zaios_service_register("wireplumber", "/usr/bin/wireplumber",
-                          wp_args, 1, 0, zaios_uid, zaios_gid);
+                          wp_args, 1, 0, 0, 0);
 
     /* MiracleCast controller (Wi-Fi Display sink) */
     const char *cast_args[] = {"--manager", NULL};
@@ -298,10 +306,10 @@ int main(int argc, char **argv) {
     zaios_service_register("zaios-input", "/usr/lib/zaios/zaios-input",
                           input_args, 1, 0, 0, 0);
 
-    /* Spotify backend (librespot + spotube-style fallback) */
+    /* Spotify backend — run as root */
     const char *spot_args[] = {NULL};
     zaios_service_register("zaios-spotify", "/usr/lib/zaios/zaios-spotify",
-                          spot_args, 1, 0, zaios_uid, zaios_gid);
+                          spot_args, 1, 0, 0, 0);
 
     /* Spawn everything */
     for (int i = 0; i < service_count; i++) {

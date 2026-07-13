@@ -586,22 +586,13 @@ stage_runtime_services_into_rootfs() {
     log "Staging shared libraries (bulk copy from host)"
     mkdir -p "$ROOTFS_DIR/usr/lib/$multiarch" "$ROOTFS_DIR/lib/$multiarch" "$ROOTFS_DIR/lib64"
 
-    # Copy all shared libraries from the host's multiarch directories
+    # Copy ALL shared libraries from the host's multiarch directories — including subdirs
     if [[ -d "/usr/lib/$multiarch" ]]; then
-        cp -a /usr/lib/$multiarch/*.so* "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
-        # Also copy subdirectories that contain libraries (e.g., pipewire, bluetooth)
-        for subdir in pipewire bluetooth gstreamer dri xorg pulseaudio alsa; do
-            [[ -d "/usr/lib/$multiarch/$subdir" ]] && \
-                cp -a "/usr/lib/$multiarch/$subdir" "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
-        done
+        # Copy everything recursively (libs + subdirs like pxlib, pipewire, etc.)
+        cp -a /usr/lib/$multiarch/* "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
     fi
     if [[ -d "/lib/$multiarch" ]]; then
-        cp -a /lib/$multiarch/*.so* "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
-        # Copy systemd and udev directories
-        for subdir in systemd udev modprobe.d; do
-            [[ -d "/lib/$multiarch/$subdir" ]] && \
-                cp -a "/lib/$multiarch/$subdir" "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
-        done
+        cp -a /lib/$multiarch/* "$ROOTFS_DIR/lib/$multiarch/" 2>/dev/null || true
     fi
     # Copy /lib64 (ld-linux dynamic linker)
     [[ -d /lib64 ]] && cp -a /lib64/*.so* "$ROOTFS_DIR/lib64/" 2>/dev/null || true
@@ -662,12 +653,35 @@ stage_runtime_services_into_rootfs() {
     ok "Qt6 runtime staged"
 
     # ── DBus config ─────────────────────────────────────────────────────────
-    mkdir -p "$ROOTFS_DIR/etc/dbus-1" "$ROOTFS_DIR/usr/share/dbus-1"
+    mkdir -p "$ROOTFS_DIR/etc/dbus-1" "$ROOTFS_DIR/usr/share/dbus-1" \
+             "$ROOTFS_DIR/usr/share/dbus-1/system-services" \
+             "$ROOTFS_DIR/usr/share/dbus-1/services"
     [[ -f /etc/dbus-1/system.conf ]] && cp /etc/dbus-1/system.conf "$ROOTFS_DIR/etc/dbus-1/"
     [[ -d /usr/share/dbus-1 ]] && cp -a /usr/share/dbus-1/* "$ROOTFS_DIR/usr/share/dbus-1/" 2>/dev/null || true
     # Create the dbus machine-id (needed for dbus to start)
     [[ -f /etc/machine-id ]] && cp /etc/machine-id "$ROOTFS_DIR/etc/machine-id" || \
         echo "$(head -c 16 /dev/urandom | xxd -p)" > "$ROOTFS_DIR/etc/machine-id"
+    # Create a minimal system.conf if the host one is missing or broken
+    if [[ ! -f "$ROOTFS_DIR/etc/dbus-1/system.conf" ]]; then
+        cat > "$ROOTFS_DIR/etc/dbus-1/system.conf" <<'DBUSCONF'
+<!DOCTYPE busconfig PUBLIC
+ "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>system</type>
+  <auth>EXTERNAL</auth>
+  <auth>ANONYMOUS</auth>
+  <listen>unix:path=/run/dbus/system_bus_socket</listen>
+  <policy context="default">
+    <allow send_destination="*" send_type="*"/>
+    <allow send_interface="*" send_type="*"/>
+    <allow receive_interface="*" receive_type="*"/>
+    <allow user="*"/>
+  </policy>
+  <standard_system_servicedirs/>
+</busconfig>
+DBUSCONF
+    fi
 
     # ── Bluetooth config + fix bluetoothd path ─────────────────────────────
     mkdir -p "$ROOTFS_DIR/etc/bluetooth"
