@@ -1,7 +1,7 @@
-# ZAIos /etc/group
 root:x:0:
 zaios:x:1000:
 dbus:x:81:
+messagebus:x:81:
 audio:x:29:zaios
 video:x:44:zaios
 input:x:104:zaios
@@ -10,4 +10,13 @@ plugdev:x:46:zaios
 netdev:x:102:zaios
 bluetooth:x:112:zaios
 wheel:x:10:zaios
+whoopsie:x:114:
+polkitd:x:115:
+systemd-resolve:x:998:
+systemd-network:x:997:
+avahi:x:116:
+colord:x:117:
+geoclue:x:118:
+rtkit:x:119:
+pulse:x:120:
 nogroup:x:65534:

@@ -653,17 +653,13 @@ stage_runtime_services_into_rootfs() {
     ok "Qt6 runtime staged"
 
     # ── DBus config ─────────────────────────────────────────────────────────
+    # ALWAYS create a minimal system.conf — the host's config references
+    # users (whoopsie, polkitd, systemd-resolve, messagebus) that may not
+    # exist in our rootfs, causing dbus to fail with "Unknown username".
     mkdir -p "$ROOTFS_DIR/etc/dbus-1" "$ROOTFS_DIR/usr/share/dbus-1" \
              "$ROOTFS_DIR/usr/share/dbus-1/system-services" \
              "$ROOTFS_DIR/usr/share/dbus-1/services"
-    [[ -f /etc/dbus-1/system.conf ]] && cp /etc/dbus-1/system.conf "$ROOTFS_DIR/etc/dbus-1/"
-    [[ -d /usr/share/dbus-1 ]] && cp -a /usr/share/dbus-1/* "$ROOTFS_DIR/usr/share/dbus-1/" 2>/dev/null || true
-    # Create the dbus machine-id (needed for dbus to start)
-    [[ -f /etc/machine-id ]] && cp /etc/machine-id "$ROOTFS_DIR/etc/machine-id" || \
-        echo "$(head -c 16 /dev/urandom | xxd -p)" > "$ROOTFS_DIR/etc/machine-id"
-    # Create a minimal system.conf if the host one is missing or broken
-    if [[ ! -f "$ROOTFS_DIR/etc/dbus-1/system.conf" ]]; then
-        cat > "$ROOTFS_DIR/etc/dbus-1/system.conf" <<'DBUSCONF'
+    cat > "$ROOTFS_DIR/etc/dbus-1/system.conf" <<'DBUSCONF'
 <!DOCTYPE busconfig PUBLIC
  "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -681,7 +677,10 @@ stage_runtime_services_into_rootfs() {
   <standard_system_servicedirs/>
 </busconfig>
 DBUSCONF
-    fi
+    [[ -d /usr/share/dbus-1 ]] && cp -a /usr/share/dbus-1/* "$ROOTFS_DIR/usr/share/dbus-1/" 2>/dev/null || true
+    # Create the dbus machine-id (needed for dbus to start)
+    [[ -f /etc/machine-id ]] && cp /etc/machine-id "$ROOTFS_DIR/etc/machine-id" || \
+        echo "$(head -c 16 /dev/urandom | xxd -p)" > "$ROOTFS_DIR/etc/machine-id"
 
     # ── Bluetooth config + fix bluetoothd path ─────────────────────────────
     mkdir -p "$ROOTFS_DIR/etc/bluetooth"
