@@ -684,7 +684,7 @@ stage_runtime_services_into_rootfs() {
     done
 
     # ── Pipewire config + modules ──────────────────────────────────────────
-    log "Staging pipewire and wireplumber config"
+    log "Staging pipewire and wireplumber config + modules"
     mkdir -p "$ROOTFS_DIR/usr/share/pipewire" "$ROOTFS_DIR/usr/share/wireplumber"
     [[ -d /usr/share/pipewire ]] && cp -a /usr/share/pipewire/* "$ROOTFS_DIR/usr/share/pipewire/" 2>/dev/null || true
     [[ -d /usr/share/wireplumber ]] && cp -a /usr/share/wireplumber/* "$ROOTFS_DIR/usr/share/wireplumber/" 2>/dev/null || true
@@ -692,9 +692,19 @@ stage_runtime_services_into_rootfs() {
     for spd in /usr/lib/$multiarch/pipewire-* /usr/lib/$multiarch/spa-* /usr/lib/pipewire-* /usr/lib/spa-*; do
         [[ -d "$spd" ]] && cp -a "$spd" "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
     done
-    # Also copy pipewire modules directory
+    # Copy pipewire modules directory (libpipewire-module-*.so)
     for pmd in /usr/lib/$multiarch/pipewire /usr/lib/pipewire; do
         [[ -d "$pmd" ]] && mkdir -p "$ROOTFS_DIR$(dirname "$pmd")" && cp -a "$pmd" "$ROOTFS_DIR$(dirname "$pmd")/" 2>/dev/null || true
+    done
+    # Copy wireplumber modules directory (libwireplumber-module-*.so)
+    for wpmd in /usr/lib/$multiarch/wireplumber-0.4 /usr/lib/wireplumber-0.4 \
+                /usr/lib/$multiarch/wireplumber /usr/lib/wireplumber; do
+        [[ -d "$wpmd" ]] && mkdir -p "$ROOTFS_DIR$(dirname "$wpmd")" && cp -a "$wpmd" "$ROOTFS_DIR$(dirname "$wpmd")/" 2>/dev/null || true
+    done
+    # Copy lua scripts for wireplumber
+    for lsd in /usr/share/wireplumber /usr/lib/$multiarch/wireplumber-0.4/scripts \
+                /usr/share/wireplumber/scripts; do
+        [[ -d "$lsd" ]] && mkdir -p "$ROOTFS_DIR$(dirname "$lsd")" && cp -a "$lsd" "$ROOTFS_DIR$(dirname "$lsd")/" 2>/dev/null || true
     done
 
     # ── NetworkManager config + state dir ──────────────────────────────────

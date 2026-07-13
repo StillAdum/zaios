@@ -248,6 +248,12 @@ int main(int argc, char **argv) {
      * as uid 1000 can create their Unix sockets there. */
     mkdir("/run/zaios", 0777);
     chmod("/run/zaios", 0777);
+    /* Create /run/dbus for dbus-daemon socket */
+    mkdir("/run/dbus", 0755);
+    /* Set global environment variables needed by services */
+    setenv("XDG_RUNTIME_DIR", "/run", 1);
+    setenv("HOME", "/root", 1);
+    setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin:/usr/lib/zaios", 1);
 
     /* Step 7: register & start services */
     ZAIOS_LOG(LOG_INFO, "starting services");
@@ -258,7 +264,7 @@ int main(int argc, char **argv) {
     gid_t zaios_gid = pw ? pw->pw_gid : 1000;
 
     /* DBus first — everything talks to it */
-    const char *dbus_args[] = {"--system", NULL};
+    const char *dbus_args[] = {"--system", "--nofork", "--nopidfile", NULL};
     zaios_service_register("dbus", "/usr/bin/dbus-daemon",
                           dbus_args, 1, 0, 0, 0);
 
