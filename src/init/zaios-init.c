@@ -260,12 +260,12 @@ int main(int argc, char **argv) {
     /* DBus first — everything talks to it */
     const char *dbus_args[] = {"--system", NULL};
     zaios_service_register("dbus", "/usr/bin/dbus-daemon",
-                          dbus_args, 1, 1, 0, 0);
+                          dbus_args, 1, 0, 0, 0);
 
     /* NetworkManager (Wi-Fi, Ethernet) */
     const char *nm_args[] = {"--no-daemon", NULL};
     zaios_service_register("networkmanager", "/usr/sbin/NetworkManager",
-                          nm_args, 1, 1, 0, 0);
+                          nm_args, 1, 0, 0, 0);
 
     /* Bluetooth (BlueZ) */
     const char *bt_args[] = {"-d", "-n", NULL};
@@ -275,7 +275,7 @@ int main(int argc, char **argv) {
     /* Pipewire (audio) */
     const char *pw_args[] = {NULL};
     zaios_service_register("pipewire", "/usr/bin/pipewire",
-                          pw_args, 1, 1, zaios_uid, zaios_gid);
+                          pw_args, 1, 0, zaios_uid, zaios_gid);
 
     /* Wireplumber (pipewire session manager) */
     const char *wp_args[] = {NULL};
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
     /* Input router (evdev → DBus → Qt shell) */
     const char *input_args[] = {NULL};
     zaios_service_register("zaios-input", "/usr/lib/zaios/zaios-input",
-                          input_args, 1, 1, 0, 0);
+                          input_args, 1, 0, 0, 0);
 
     /* Spotify backend (librespot + spotube-style fallback) */
     const char *spot_args[] = {NULL};

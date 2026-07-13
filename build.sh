@@ -665,10 +665,49 @@ stage_runtime_services_into_rootfs() {
     mkdir -p "$ROOTFS_DIR/etc/dbus-1" "$ROOTFS_DIR/usr/share/dbus-1"
     [[ -f /etc/dbus-1/system.conf ]] && cp /etc/dbus-1/system.conf "$ROOTFS_DIR/etc/dbus-1/"
     [[ -d /usr/share/dbus-1 ]] && cp -a /usr/share/dbus-1/* "$ROOTFS_DIR/usr/share/dbus-1/" 2>/dev/null || true
+    # Create the dbus machine-id (needed for dbus to start)
+    [[ -f /etc/machine-id ]] && cp /etc/machine-id "$ROOTFS_DIR/etc/machine-id" || \
+        echo "$(head -c 16 /dev/urandom | xxd -p)" > "$ROOTFS_DIR/etc/machine-id"
 
-    # ── Bluetooth config ────────────────────────────────────────────────────
+    # ── Bluetooth config + fix bluetoothd path ─────────────────────────────
     mkdir -p "$ROOTFS_DIR/etc/bluetooth"
     [[ -f /etc/bluetooth/main.conf ]] && cp /etc/bluetooth/main.conf "$ROOTFS_DIR/etc/bluetooth/"
+    # On Ubuntu 24.04, bluetoothd may be at different paths. Find and symlink.
+    for btd_path in /usr/libexec/bluetooth/bluetoothd /usr/libexec/bluetoothd \
+                    /usr/lib/bluetooth/bluetoothd /usr/sbin/bluetoothd; do
+        if [[ -f "$btd_path" ]]; then
+            mkdir -p "$ROOTFS_DIR/usr/libexec/bluetooth"
+            cp -a "$btd_path" "$ROOTFS_DIR/usr/libexec/bluetooth/bluetoothd" 2>/dev/null
+            ok "Staged bluetoothd from $btd_path"
+            break
+        fi
+    done
+
+    # ── Pipewire config + modules ──────────────────────────────────────────
+    log "Staging pipewire and wireplumber config"
+    mkdir -p "$ROOTFS_DIR/usr/share/pipewire" "$ROOTFS_DIR/usr/share/wireplumber"
+    [[ -d /usr/share/pipewire ]] && cp -a /usr/share/pipewire/* "$ROOTFS_DIR/usr/share/pipewire/" 2>/dev/null || true
+    [[ -d /usr/share/wireplumber ]] && cp -a /usr/share/wireplumber/* "$ROOTFS_DIR/usr/share/wireplumber/" 2>/dev/null || true
+    # Copy pipewire SPA plugins (needed for pw_loop_new)
+    for spd in /usr/lib/$multiarch/pipewire-* /usr/lib/$multiarch/spa-* /usr/lib/pipewire-* /usr/lib/spa-*; do
+        [[ -d "$spd" ]] && cp -a "$spd" "$ROOTFS_DIR/usr/lib/$multiarch/" 2>/dev/null || true
+    done
+    # Also copy pipewire modules directory
+    for pmd in /usr/lib/$multiarch/pipewire /usr/lib/pipewire; do
+        [[ -d "$pmd" ]] && mkdir -p "$ROOTFS_DIR$(dirname "$pmd")" && cp -a "$pmd" "$ROOTFS_DIR$(dirname "$pmd")/" 2>/dev/null || true
+    done
+
+    # ── NetworkManager config + state dir ──────────────────────────────────
+    mkdir -p "$ROOTFS_DIR/var/lib/NetworkManager" "$ROOTFS_DIR/etc/NetworkManager"
+    [[ -d /etc/NetworkManager ]] && cp -a /etc/NetworkManager/* "$ROOTFS_DIR/etc/NetworkManager/" 2>/dev/null || true
+
+    # ── Create writable runtime directories in rootfs ──────────────────────
+    mkdir -p "$ROOTFS_DIR/var/lib/dbus" "$ROOTFS_DIR/var/run/dbus" \
+             "$ROOTFS_DIR/var/lib/NetworkManager" "$ROOTFS_DIR/var/log" \
+             "$ROOTFS_DIR/var/cache" "$ROOTFS_DIR/var/spool" \
+             "$ROOTFS_DIR/var/tmp" "$ROOTFS_DIR/tmp" \
+             "$ROOTFS_DIR/run/zaios" "$ROOTFS_DIR/run/dbus"
+    chmod 1777 "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/var/tmp"
 
     # ── Runtime directories ─────────────────────────────────────────────────
     mkdir -p "$ROOTFS_DIR/run/zaios" "$ROOTFS_DIR/var/lib/zaios" "$ROOTFS_DIR/var/run"
@@ -1033,6 +1072,37 @@ mount -t squashfs -o ro,loop "$SQFS_PATH" /newroot 2>/dev/null || \
     }
 }
 echo "[zaios-initramfs] Squashfs mounted successfully."
+
+# ── Set up overlayfs to make the read-only squashfs writable ─────────────
+# The squashfs is read-only. Services like NetworkManager, dbus, pipewire
+# need to write to /var/lib, /var/run, /etc, /tmp, etc. We use overlayfs
+# with a tmpfs upper layer so writes go to RAM (standard live CD approach).
+echo "[zaios-initramfs] Setting up overlayfs for writable root..."
+
+# Mount a tmpfs to hold the overlay upper/work dirs
+mkdir -p /mnt/overlay
+mount -t tmpfs tmpfs /mnt/overlay 2>/dev/null
+mkdir -p /mnt/overlay/upper /mnt/overlay/work
+
+# The squashfs is currently at /newroot. Move it to /mnt/squashfs.
+mkdir -p /mnt/squashfs
+mount --move /newroot /mnt/squashfs 2>/dev/null
+
+# Mount overlayfs: lower = squashfs (read-only), upper = tmpfs (writable)
+mount -t overlay overlay \
+    -o "lowerdir=/mnt/squashfs,upperdir=/mnt/overlay/upper,workdir=/mnt/overlay/work" \
+    /newroot 2>/dev/null
+
+if [ $? -ne 0 ]; then
+    echo "[zaios-initramfs] WARNING: overlayfs mount failed — using read-only squashfs directly"
+    echo "[zaios-initramfs] Services may fail with 'Read-only file system'"
+    # Fall back to just remounting the squashfs directly
+    umount /mnt/squashfs 2>/dev/null
+    mount -t squashfs -o ro,loop "$SQFS_PATH" /newroot 2>/dev/null || \
+        mount -t squashfs -o ro "$SQFS_PATH" /newroot 2>/dev/null
+fi
+
+echo "[zaios-initramfs] Root filesystem ready (overlayfs writable)."
 
 # Move /dev /proc /sys into newroot
 mount --move /dev  /newroot/dev  2>/dev/null
