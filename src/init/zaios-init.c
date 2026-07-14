@@ -350,15 +350,26 @@ int main(int argc, char **argv) {
     ZAIOS_LOG(LOG_INFO, "starting seatd (seat manager)");
     pid_t seatd_pid = fork();
     if (seatd_pid == 0) {
-        /* seatd creates a Unix socket at /run/seatd.sock */
-        execlp("seatd", "seatd", "-s", "seat0", "-u", "root", NULL);
-        /* If seatd not found, continue without it — cage may still work
-         * with WLR_BACKENDS=drm as root */
+        /* seatd -n = foreground mode (don't fork)
+         * -s seat0 = seat name
+         * -u root = run as root
+         * -l 2 = info log level
+         * Socket is created at /run/seatd.sock by default */
+        execlp("seatd", "seatd", "-n", "-s", "seat0", "-u", "root", "-g", "root", "-l", "2", NULL);
         ZAIOS_LOG(LOG_WARNING, "seatd not found, continuing without it");
         _exit(1);
     }
-    /* Give seatd a moment to start */
-    sleep(1);
+    /* Give seatd time to create the socket */
+    for (int w = 0; w < 30; w++) {
+        if (access("/run/seatd.sock", F_OK) == 0) {
+            ZAIOS_LOG(LOG_INFO, "seatd socket ready at /run/seatd.sock");
+            break;
+        }
+        usleep(100000); /* 100ms */
+    }
+    if (access("/run/seatd.sock", F_OK) != 0) {
+        ZAIOS_LOG(LOG_WARNING, "seatd socket not ready — trying to continue anyway");
+    }
 
     ZAIOS_LOG(LOG_INFO, "starting Cage Wayland compositor");
     pid_t cage_pid = fork();
