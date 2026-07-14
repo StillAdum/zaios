@@ -311,9 +311,24 @@ int main(int argc, char **argv) {
     zaios_service_register("zaios-spotify", "/usr/lib/zaios/zaios-spotify",
                           spot_args, 1, 0, 0, 0);
 
-    /* Spawn everything */
+    /* Spawn everything — dbus first, wait for it, then the rest */
     for (int i = 0; i < service_count; i++) {
         spawn_service(&services[i]);
+        if (strcmp(services[i].name, "dbus") == 0) {
+            /* Wait for dbus socket to appear before starting other services */
+            for (int w = 0; w < 50; w++) {
+                if (access("/run/dbus/system_bus_socket", F_OK) == 0) {
+                    ZAIOS_LOG(LOG_INFO, "dbus socket ready");
+                    break;
+                }
+                usleep(100000); /* 100ms */
+            }
+            if (access("/run/dbus/system_bus_socket", F_OK) != 0) {
+                ZAIOS_LOG(LOG_WARNING, "dbus socket not ready after 5s — continuing anyway");
+            } else {
+                sleep(1); /* Give dbus a moment to fully initialize */
+            }
+        }
         usleep(100000); /* 100ms between starts to avoid races */
     }
 
@@ -326,13 +341,26 @@ int main(int argc, char **argv) {
         ZAIOS_LOG(LOG_WARNING, "/dev/dri/card0 not present — trying framebuffer");
     }
 
-    /* Cage (Wayland kiosk compositor) — runs as root, then drops to zaios uid */
+    /* Cage (Wayland kiosk compositor) — runs as root
+     * Cage uses wlroots which uses libseat for DRM access. libseat tries
+     * to connect to systemd-logind by default, which doesn't exist in
+     * ZAIos. We bypass libseat by setting:
+     *   WLR_BACKENDS=drm       — use the DRM backend directly
+     *   WLR_DRM_DEVICES=/dev/dri/card0 — explicit device
+     *   LIBSEAT_BACKEND=seatd  — use seatd backend (not logind)
+     *   SEATD_LAUNCHER=compositor — we are the compositor, grant ourselves
+     * Also try WLR_RENDERER_ALLOW_SOFTWARE=1 for VMs without GPU accel.
+     */
     ZAIOS_LOG(LOG_INFO, "starting Cage Wayland compositor");
     pid_t cage_pid = fork();
     if (cage_pid == 0) {
         setenv("XDG_RUNTIME_DIR", "/run", 1);
         setenv("WLR_BACKENDS", "drm", 1);
         setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
+        setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
+        setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
+        /* Bypass libseat — we're running as root so we can access DRM directly */
+        unsetenv("LIBSEAT_BACKEND");
         /* Tell Cage to run the zaios-shell as its client */
         execlp("cage", "cage", "--", "/usr/bin/zaios-shell", NULL);
         ZAIOS_LOG(LOG_ERR, "failed to exec cage: %s", strerror(errno));
@@ -358,6 +386,9 @@ int main(int argc, char **argv) {
                 setenv("XDG_RUNTIME_DIR", "/run", 1);
                 setenv("WLR_BACKENDS", "drm", 1);
                 setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
+                setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
+                setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
+                unsetenv("LIBSEAT_BACKEND");
                 execlp("cage", "cage", "--", "/usr/bin/zaios-shell", NULL);
                 _exit(127);
             }
