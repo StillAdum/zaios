@@ -553,6 +553,7 @@ stage_runtime_services_into_rootfs() {
         [pipewire]="/usr/bin/pipewire"
         [wireplumber]="/usr/bin/wireplumber"
         [cage]="/usr/bin/cage"
+        [seatd]="/usr/bin/seatd"
         [mpv]="/usr/bin/mpv"
         [wpa_supplicant]="/usr/sbin/wpa_supplicant"
         [bluetoothd]="/usr/libexec/bluetooth/bluetoothd"
