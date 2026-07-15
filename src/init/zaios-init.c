@@ -404,34 +404,28 @@ int main(int argc, char **argv) {
             break;
         }
         if (pid == cage_pid) {
-            ZAIOS_LOG(LOG_WARNING, "Cage (compositor) exited status=%d — restarting in 3s",
+            ZAIOS_LOG(LOG_WARNING, "Installer/Shell exited status=%d — restarting in 3s",
                       WEXITSTATUS(status));
             sleep(3);
             cage_pid = fork();
             if (cage_pid == 0) {
-                setenv("XDG_RUNTIME_DIR", "/run", 1);
+                /* Same framebuffer approach as initial launch */
+                setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb0", 1);
+                setenv("QT_QPA_FONTDIR", "/usr/share/fonts", 1);
+                setenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/usr/lib/x86_64-linux-gnu/qt6/plugins", 1);
+                setenv("QT_QPA_GENERIC_PLUGINS", "evdevkeyboard,evdevmouse,evdevtouch", 1);
                 setenv("HOME", "/root", 1);
-                setenv("WAYLAND_DISPLAY", "wayland-0", 1);
-                setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
 
-                /* Try weston first */
-                if (access("/usr/bin/weston", X_OK) == 0) {
-                    execlp("weston", "weston",
-                           "--backend=drm-backend.so",
-                           "--seat=seat0", "--tty=1",
-                           "--idle-time=0", "--use-pixman", NULL);
+                if (access("/usr/bin/calamares", X_OK) == 0) {
+                    ZAIOS_LOG(LOG_INFO, "relaunching Calamares installer");
+                    execlp("calamares", "calamares", "-d", NULL);
                 }
-
-                /* Fall back to cage */
-                setenv("WLR_BACKENDS", "drm", 1);
-                setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
-                setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
-                if (access("/run/seatd.sock", F_OK) == 0) {
-                    setenv("LIBSEAT_BACKEND", "seatd", 1);
-                } else {
-                    setenv("LIBSEAT_BACKEND", "builtin", 1);
+                if (access("/usr/bin/zaios-shell", X_OK) == 0) {
+                    ZAIOS_LOG(LOG_INFO, "relaunching zaios-shell on framebuffer");
+                    execlp("/usr/bin/zaios-shell", "zaios-shell", NULL);
                 }
-                execlp("cage", "cage", "--", "/usr/bin/zaios-shell", NULL);
+                ZAIOS_LOG(LOG_WARNING, "No GUI app found — dropping to shell");
+                execlp("/bin/sh", "sh", NULL);
                 _exit(127);
             }
         } else {
