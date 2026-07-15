@@ -250,15 +250,19 @@ int main(int argc, char **argv) {
     chmod("/run/zaios", 0777);
     /* Create /run/dbus for dbus-daemon socket */
     mkdir("/run/dbus", 0755);
-    /* Set global environment variables needed by services */
-    setenv("XDG_RUNTIME_DIR", "/run", 1);
+    /* Set global environment variables needed by services.
+     * Use /run/user/0 as XDG_RUNTIME_DIR (mode 0700, owned by root).
+     * Weston requires XDG_RUNTIME_DIR to be mode 0700.
+     * Other services use /run/zaios/ (mode 0777) for their sockets. */
+    mkdir("/run/user", 0755);
+    mkdir("/run/user/0", 0700);
+    chmod("/run/user/0", 0700);
+    setenv("XDG_RUNTIME_DIR", "/run/user/0", 1);
     setenv("HOME", "/root", 1);
     setenv("PATH", "/usr/bin:/usr/sbin:/bin:/sbin:/usr/lib/zaios", 1);
     /* Also create /root/.local/state for wireplumber state */
     mkdir("/root/.local", 0755);
     mkdir("/root/.local/state", 0755);
-    /* Make /run fully writable (pipewire needs to create /run/pipewire-0.lock) */
-    chmod("/run", 0777);
 
     /* Step 7: register & start services */
     ZAIOS_LOG(LOG_INFO, "starting services");

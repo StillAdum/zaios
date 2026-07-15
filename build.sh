@@ -723,6 +723,14 @@ DBUSCONF
         [[ -d "$lsd" ]] && mkdir -p "$ROOTFS_DIR$(dirname "$lsd")" && cp -a "$lsd" "$ROOTFS_DIR$(dirname "$lsd")/" 2>/dev/null || true
     done
 
+    # ── XKB keyboard data (needed by weston and Qt for keyboard layout) ────
+    log "Staging XKB data"
+    mkdir -p "$ROOTFS_DIR/usr/share/X11/xkb"
+    if [[ -d /usr/share/X11/xkb ]]; then
+        cp -a /usr/share/X11/xkb/* "$ROOTFS_DIR/usr/share/X11/xkb/" 2>/dev/null || true
+        ok "XKB data staged"
+    fi
+
     # ── NetworkManager config + state dir ──────────────────────────────────
     mkdir -p "$ROOTFS_DIR/var/lib/NetworkManager" "$ROOTFS_DIR/etc/NetworkManager"
     [[ -d /etc/NetworkManager ]] && cp -a /etc/NetworkManager/* "$ROOTFS_DIR/etc/NetworkManager/" 2>/dev/null || true
