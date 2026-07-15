@@ -41,8 +41,12 @@
 #include "NotificationManager.h"
 
 int main(int argc, char **argv) {
-    // ── Force Wayland (we run inside Cage) ─────────────────────────────────
-    qputenv("QT_QPA_PLATFORM", "wayland");
+    // ── Platform selection: use whatever the environment specifies ────────
+    // If QT_QPA_PLATFORM is already set (e.g. linuxfb for installer mode),
+    // respect it. Otherwise default to wayland.
+    if (qgetenv("QT_QPA_PLATFORM").isEmpty()) {
+        qputenv("QT_QPA_PLATFORM", "wayland");
+    }
     qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", "xdg-shell");
     qputenv("QT_LOGGING_RULES", "qt.qpa.wayland=false");
