@@ -291,10 +291,12 @@ int main(int argc, char **argv) {
     zaios_service_register("pipewire", "/usr/bin/pipewire",
                           pw_args, 1, 0, 0, 0);
 
-    /* Wireplumber (pipewire session manager) — run as root */
-    const char *wp_args[] = {"-c", "/usr/share/wireplumber/wireplumber.conf", NULL};
-    zaios_service_register("wireplumber", "/usr/bin/wireplumber",
-                          wp_args, 1, 0, 0, 0);
+    /* Wireplumber (pipewire session manager) — skip for now, it needs
+     * a config file that may not exist. We'll add it back later.
+     * const char *wp_args[] = {NULL};
+     * zaios_service_register("wireplumber", "/usr/bin/wireplumber",
+     *                       wp_args, 1, 0, 0, 0);
+     */
 
     /* MiracleCast controller (Wi-Fi Display sink) */
     const char *cast_args[] = {"--manager", NULL};
@@ -341,57 +343,67 @@ int main(int argc, char **argv) {
         ZAIOS_LOG(LOG_WARNING, "/dev/dri/card0 not present — trying framebuffer");
     }
 
-    /* Cage (Wayland kiosk compositor) — runs as root
-     * Cage uses wlroots which uses libseat for DRM access. libseat tries
-     * to connect to systemd-logind by default, which doesn't exist.
-     * We start seatd first (a standalone seat manager), then Cage
-     * connects to seatd instead of logind.
-     */
-    ZAIOS_LOG(LOG_INFO, "starting seatd (seat manager)");
-    pid_t seatd_pid = fork();
-    if (seatd_pid == 0) {
-        /* seatd -n = foreground (don't daemonize)
-         * -s seat0 = seat name
-         * -u root -g root = run as root
-         * -l 3 = debug log level (so we can see what's happening) */
-        execlp("seatd", "seatd", "-n", "-s", "seat0", "-u", "root", "-g", "root", "-l", "3", NULL);
-        ZAIOS_LOG(LOG_WARNING, "seatd not found — will try builtin/direct DRM access");
-        _exit(1);
-    }
-    /* Wait for seatd socket — try multiple possible paths */
-    int seatd_ready = 0;
-    for (int w = 0; w < 30; w++) {
-        if (access("/run/seatd.sock", F_OK) == 0 ||
-            access("/var/run/seatd.sock", F_OK) == 0 ||
-            access("/tmp/seatd.sock", F_OK) == 0) {
-            ZAIOS_LOG(LOG_INFO, "seatd socket ready");
-            seatd_ready = 1;
-            break;
-        }
-        usleep(100000); /* 100ms */
-    }
-    if (!seatd_ready) {
-        ZAIOS_LOG(LOG_WARNING, "seatd socket not found after 3s — trying direct DRM access");
+    /* ── Compositor: Try weston first (no libseat dependency), then cage ───
+     * Cage uses wlroots which uses libseat, and libseat always tries to
+     * connect to systemd-logind (which doesn't exist in ZAIos).
+     * Weston uses its own DRM access and doesn't need libseat.
+     * If weston isn't available, fall back to cage with seatd. */
+
+    /* Create weston config for kiosk mode */
+    FILE *weston_conf = fopen("/run/weston.ini", "w");
+    if (weston_conf) {
+        fprintf(weston_conf,
+            "[core]\n"
+            "idle-time=0\n"
+            "shell=kiosk-shell.so\n"
+            "[kiosk]\n"
+            "app-id=zaios-shell\n");
+        fclose(weston_conf);
     }
 
-    ZAIOS_LOG(LOG_INFO, "starting Cage Wayland compositor");
+    ZAIOS_LOG(LOG_INFO, "starting Wayland compositor (weston/cage)");
     pid_t cage_pid = fork();
     if (cage_pid == 0) {
         setenv("XDG_RUNTIME_DIR", "/run", 1);
+        setenv("HOME", "/root", 1);
+        setenv("WAYLAND_DISPLAY", "wayland-0", 1);
+        setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
+
+        /* Try weston first — it doesn't need libseat */
+        if (access("/usr/bin/weston", X_OK) == 0) {
+            ZAIOS_LOG(LOG_INFO, "using weston compositor");
+            execlp("weston", "weston",
+                   "--backend=drm-backend.so",
+                   "--seat=seat0",
+                   "--tty=1",
+                   "--idle-time=0",
+                   "--use-pixman",  /* software rendering for VMs */
+                   NULL);
+        }
+
+        /* Fall back to cage with seatd */
+        if (access("/usr/bin/seatd", X_OK) == 0) {
+            ZAIOS_LOG(LOG_INFO, "starting seatd for cage");
+            pid_t seatd_pid = fork();
+            if (seatd_pid == 0) {
+                execlp("seatd", "seatd", "-n", "-s", "seat0", "-u", "root", "-g", "root", NULL);
+                _exit(1);
+            }
+            sleep(2);
+        }
+
+        ZAIOS_LOG(LOG_INFO, "using cage compositor");
         setenv("WLR_BACKENDS", "drm", 1);
         setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
-        setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
         setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
-        /* Try builtin backend first (direct DRM access as root, no seatd needed).
-         * If that fails, fall back to seatd. */
-        if (seatd_ready) {
+
+        /* Try seatd backend, then builtin */
+        if (access("/run/seatd.sock", F_OK) == 0) {
             setenv("LIBSEAT_BACKEND", "seatd", 1);
-            setenv("SEATD_SOCK", "/run/seatd.sock", 1);
         } else {
-            /* No seatd — try builtin (direct device access as root) */
             setenv("LIBSEAT_BACKEND", "builtin", 1);
         }
-        /* Tell Cage to run the zaios-shell as its client */
+
         execlp("cage", "cage", "--", "/usr/bin/zaios-shell", NULL);
         ZAIOS_LOG(LOG_ERR, "failed to exec cage: %s", strerror(errno));
         _exit(127);
@@ -414,13 +426,24 @@ int main(int argc, char **argv) {
             cage_pid = fork();
             if (cage_pid == 0) {
                 setenv("XDG_RUNTIME_DIR", "/run", 1);
+                setenv("HOME", "/root", 1);
+                setenv("WAYLAND_DISPLAY", "wayland-0", 1);
+                setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
+
+                /* Try weston first */
+                if (access("/usr/bin/weston", X_OK) == 0) {
+                    execlp("weston", "weston",
+                           "--backend=drm-backend.so",
+                           "--seat=seat0", "--tty=1",
+                           "--idle-time=0", "--use-pixman", NULL);
+                }
+
+                /* Fall back to cage */
                 setenv("WLR_BACKENDS", "drm", 1);
                 setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
-                setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
                 setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
-                if (seatd_ready) {
+                if (access("/run/seatd.sock", F_OK) == 0) {
                     setenv("LIBSEAT_BACKEND", "seatd", 1);
-                    setenv("SEATD_SOCK", "/run/seatd.sock", 1);
                 } else {
                     setenv("LIBSEAT_BACKEND", "builtin", 1);
                 }

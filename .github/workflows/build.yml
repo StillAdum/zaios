@@ -149,7 +149,7 @@ jobs:
           # Runtime services to stage into the rootfs (needed by zaios-init)
           # Use || true so one missing package doesn't block the whole build
           sudo apt-get install -y --no-install-recommends \
-            cage pipewire wireplumber seatd \
+            weston cage pipewire wireplumber seatd \
             network-manager bluez wpasupplicant \
             dbus udev \
             mpv \

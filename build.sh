@@ -554,6 +554,8 @@ stage_runtime_services_into_rootfs() {
         [wireplumber]="/usr/bin/wireplumber"
         [cage]="/usr/bin/cage"
         [seatd]="/usr/bin/seatd"
+        [weston]="/usr/bin/weston"
+        [weston-shell]="/usr/lib/weston/weston-desktop-shell"
         [mpv]="/usr/bin/mpv"
         [wpa_supplicant]="/usr/sbin/wpa_supplicant"
         [bluetoothd]="/usr/libexec/bluetooth/bluetoothd"
