@@ -347,71 +347,51 @@ int main(int argc, char **argv) {
         ZAIOS_LOG(LOG_WARNING, "/dev/dri/card0 not present — trying framebuffer");
     }
 
-    /* ── Compositor: Try weston first (no libseat dependency), then cage ───
-     * Cage uses wlroots which uses libseat, and libseat always tries to
-     * connect to systemd-logind (which doesn't exist in ZAIos).
-     * Weston uses its own DRM access and doesn't need libseat.
-     * If weston isn't available, fall back to cage with seatd. */
+    /* ── Boot straight to Calamares installer (no compositor needed) ───────
+     * Skip the Wayland compositor entirely. Run Calamares directly on
+     * the Linux framebuffer using Qt's linuxfb platform plugin.
+     * This avoids all libseat/logind/DRM issues.
+     *
+     * If Calamares isn't available, try zaios-shell on linuxfb.
+     * If neither works, drop to a shell. */
+    ZAIOS_LOG(LOG_INFO, "starting Calamares installer on framebuffer");
 
-    /* Create weston config for kiosk mode */
-    FILE *weston_conf = fopen("/run/weston.ini", "w");
-    if (weston_conf) {
-        fprintf(weston_conf,
-            "[core]\n"
-            "idle-time=0\n"
-            "shell=kiosk-shell.so\n"
-            "[kiosk]\n"
-            "app-id=zaios-shell\n");
-        fclose(weston_conf);
-    }
+    /* Set up environment for framebuffer Qt apps */
+    setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb0", 1);
+    setenv("QT_QPA_FONTDIR", "/usr/share/fonts", 1);
+    setenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/usr/lib/x86_64-linux-gnu/qt6/plugins", 1);
+    setenv("QT_QPA_GENERIC_PLUGINS", "evdevkeyboard,evdevmouse,evdevtouch", 1);
 
-    ZAIOS_LOG(LOG_INFO, "starting Wayland compositor (weston/cage)");
-    pid_t cage_pid = fork();
-    if (cage_pid == 0) {
-        setenv("XDG_RUNTIME_DIR", "/run", 1);
-        setenv("HOME", "/root", 1);
-        setenv("WAYLAND_DISPLAY", "wayland-0", 1);
-        setenv("WLR_RENDERER_ALLOW_SOFTWARE", "1", 1);
-
-        /* Try weston first — it doesn't need libseat */
-        if (access("/usr/bin/weston", X_OK) == 0) {
-            ZAIOS_LOG(LOG_INFO, "using weston compositor");
-            execlp("weston", "weston",
-                   "--backend=drm-backend.so",
-                   "--seat=seat0",
-                   "--tty=1",
-                   "--idle-time=0",
-                   "--use-pixman",  /* software rendering for VMs */
-                   NULL);
-        }
-
-        /* Fall back to cage with seatd */
-        if (access("/usr/bin/seatd", X_OK) == 0) {
-            ZAIOS_LOG(LOG_INFO, "starting seatd for cage");
-            pid_t seatd_pid = fork();
-            if (seatd_pid == 0) {
-                execlp("seatd", "seatd", "-n", "-s", "seat0", "-u", "root", "-g", "root", NULL);
-                _exit(1);
-            }
-            sleep(2);
-        }
-
-        ZAIOS_LOG(LOG_INFO, "using cage compositor");
-        setenv("WLR_BACKENDS", "drm", 1);
-        setenv("WLR_DRM_DEVICES", "/dev/dri/card0", 1);
-        setenv("WLR_LIBINPUT_NO_DEVICES", "1", 1);
-
-        /* Try seatd backend, then builtin */
-        if (access("/run/seatd.sock", F_OK) == 0) {
-            setenv("LIBSEAT_BACKEND", "seatd", 1);
+    /* Check if /dev/fb0 exists */
+    if (access("/dev/fb0", F_OK) != 0) {
+        ZAIOS_LOG(LOG_WARNING, "/dev/fb0 not found — trying /dev/fb/0");
+        if (access("/dev/fb/0", F_OK) == 0) {
+            setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb/0", 1);
         } else {
-            setenv("LIBSEAT_BACKEND", "builtin", 1);
+            ZAIOS_LOG(LOG_WARNING, "No framebuffer device found!");
         }
-
-        execlp("cage", "cage", "--", "/usr/bin/zaios-shell", NULL);
-        ZAIOS_LOG(LOG_ERR, "failed to exec cage: %s", strerror(errno));
-        _exit(127);
     }
+
+    /* Try Calamares first (straight to installer) */
+    pid_t installer_pid = fork();
+    if (installer_pid == 0) {
+        if (access("/usr/bin/calamares", X_OK) == 0) {
+            ZAIOS_LOG(LOG_INFO, "launching Calamares installer");
+            execlp("calamares", "calamares", "-d", NULL);
+        }
+        /* If calamares not found, try zaios-shell on framebuffer */
+        if (access("/usr/bin/zaios-shell", X_OK) == 0) {
+            ZAIOS_LOG(LOG_INFO, "launching zaios-shell on framebuffer");
+            execlp("/usr/bin/zaios-shell", "zaios-shell", NULL);
+        }
+        /* If neither found, drop to shell */
+        ZAIOS_LOG(LOG_WARNING, "No GUI app found — dropping to shell");
+        execlp("/bin/sh", "sh", NULL);
+        _exit(1);
+    }
+
+    /* If installer exits, reboot */
+    pid_t cage_pid = installer_pid; /* reuse variable name for waitpid */
 
     /* Main loop — reap zombies, watch for shutdown */
     ZAIOS_LOG(LOG_INFO, "entering main loop");

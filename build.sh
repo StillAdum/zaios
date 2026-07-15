@@ -1169,9 +1169,19 @@ build_calamares() {
     warn "The ZAIos Calamares config is in /etc/calamares/ and is shipped in the ISO rootfs."
     # Stage the binary if installed on host
     if command -v calamares >/dev/null 2>&1 && [[ "$ARCH" == "x86_64" ]]; then
-        mkdir -p "$ROOTFS_DIR/usr/bin"
+        mkdir -p "$ROOTFS_DIR/usr/bin" "$ROOTFS_DIR/usr/lib"
         cp "$(command -v calamares)" "$ROOTFS_DIR/usr/bin/calamares"
-        ok "Staged host Calamares binary into rootfs"
+        # Also copy Calamares shared libraries
+        for lib in /usr/lib/*/libcalamares*.so* /usr/lib/*/calamares; do
+            [[ -e "$lib" ]] && cp -a "$lib" "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
+        done
+        # Copy Calamares modules
+        [[ -d /usr/lib/*/calamares ]] && cp -a /usr/lib/*/calamares "$ROOTFS_DIR/usr/lib/" 2>/dev/null || true
+        # Copy Calamares Python modules
+        [[ -d /usr/lib/python3/dist-packages/calamares ]] && \
+            mkdir -p "$ROOTFS_DIR/usr/lib/python3/dist-packages" && \
+            cp -a /usr/lib/python3/dist-packages/calamares "$ROOTFS_DIR/usr/lib/python3/dist-packages/" 2>/dev/null || true
+        ok "Staged host Calamares binary + libs into rootfs"
     fi
 }
 
