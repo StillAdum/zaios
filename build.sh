@@ -1256,30 +1256,16 @@ build_iso() {
     # Marker file for initramfs probe
     touch "$ISO_DIR/zaios/.boot-marker"
 
-    # ISOLINUX config (BIOS boot)
+    # ISOLINUX config (BIOS boot) — NO MENU, boot straight to installer
     cat > "$ISO_DIR/boot/isolinux/isolinux.cfg" <<EOF
 SERIAL 0 115200
-UI vesamenu.c32
 PROMPT 0
-TIMEOUT 30
-DEFAULT zaios
-
-MENU TITLE ZAIos $ZAIOS_VERSION ($ZAIOS_CODENAME) — $ARCH
-
-LABEL zaios
-    MENU LABEL ^ZAIos Live (default)
-    KERNEL /live/vmlinuz
-    APPEND initrd=/live/initramfs.img boot=live zaios.media=cdrom zaios.arch=$ARCH quiet loglevel=3
-
-LABEL zaios-verbose
-    MENU LABEL ZAIos Live (verbose boot)
-    KERNEL /live/vmlinuz
-    APPEND initrd=/live/initramfs.img boot=live zaios.media=cdrom zaios.arch=$ARCH loglevel=7
+TIMEOUT 1
+DEFAULT zaios-install
 
 LABEL zaios-install
-    MENU LABEL ^Install ZAIos to disk (Calamares)
     KERNEL /live/vmlinuz
-    APPEND initrd=/live/initramfs.img boot=live zaios.media=cdrom zaios.arch=$ARCH zaios.installer=1 quiet
+    APPEND initrd=/live/initramfs.img boot=live zaios.media=cdrom zaios.arch=$ARCH zaios.installer=1 console=ttyS0,115200 console=tty0 loglevel=7
 EOF
 
     # ISOLINUX binaries - PREFER /usr/lib/ISOLINUX/ (version-matched with isolinux.bin)
@@ -1308,36 +1294,15 @@ EOF
         ok "Staged ISOLINUX module: $f ($(du -h "$src" | cut -f1))"
     done
 
-    # GRUB config (EFI boot, both x86_64-efi and arm64-efi)
+    # GRUB config (EFI boot) — NO MENU, boot straight to installer
     cat > "$ISO_DIR/boot/grub/grub.cfg" <<'GRUBCFG'
 set default=0
-set timeout=10
-set gfxmode=auto
-set gfxpayload=keep
+set timeout=1
 insmod all_video
-insmod gfxterm
-insmod png
-insmod progress
 insmod gzio
 
-loadfont /boot/grub/fonts/unicode.pf2
-terminal_output gfxterm
-
-menu_color_normal=white/black
-menu_color_highlight=cyan/black
-
-menuentry "ZAIos Live (default)" {
-    linux  /live/vmlinuz boot=live zaios.media=cdrom quiet loglevel=3
-    initrd /live/initramfs.img
-}
-
-menuentry "ZAIos Live (verbose)" {
-    linux  /live/vmlinuz boot=live zaios.media=cdrom loglevel=7
-    initrd /live/initramfs.img
-}
-
-menuentry "Install ZAIos to disk (Calamares)" {
-    linux  /live/vmlinuz boot=live zaios.media=cdrom zaios.installer=1 quiet
+menuentry "ZAIos Installer" {
+    linux  /live/vmlinuz boot=live zaios.media=cdrom zaios.installer=1 console=ttyS0,115200 console=tty0 loglevel=7
     initrd /live/initramfs.img
 }
 GRUBCFG
