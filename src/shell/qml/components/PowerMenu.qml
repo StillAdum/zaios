@@ -52,7 +52,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     iconText: "⏻"
-                    cardTitle: "Power Off"
+                    text: "Power Off"
                     accentColor: Theme.error
                     focus: true
                     onClicked: Power.powerOff()
@@ -61,7 +61,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     iconText: "↻"
-                    cardTitle: "Restart"
+                    text: "Restart"
                     accentColor: Theme.warning
                     onClicked: Power.reboot()
                 }
@@ -69,7 +69,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     iconText: "🌙"
-                    cardTitle: "Suspend"
+                    text: "Suspend"
                     accentColor: Theme.accentSoft
                     onClicked: Power.suspend()
                 }
@@ -77,7 +77,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     iconText: "✕"
-                    cardTitle: "Cancel"
+                    text: "Cancel"
                     accentColor: Theme.textSecondary
                     onClicked: root.powerMenuVisible = false
                 }
@@ -94,6 +94,7 @@ Item {
 
     component PowerButton: FocusButton {
         property string iconText: ""
+        property string cardTitle: ""
         property color  accentColor: Theme.accent
         cornerRadius: Theme.radiusL
         bgColor: Qt.rgba(0, 0, 0, 0.3)
@@ -114,7 +115,7 @@ Item {
             }
 
             Text {
-                text: parent.parent.label
+                text: parent.parent.cardTitle
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.weight: Font.Medium
