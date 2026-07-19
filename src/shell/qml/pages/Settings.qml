@@ -65,7 +65,7 @@ Item {
         SettingsTile {
             iconText: "📺"
             cardTitle: "Display & Sound"
-            subcardTitle: "Volume: " + Settings.volume + "%"
+            subtitle: "Volume: " + Settings.volume + "%"
             accentColor: Theme.accentSoft
             onActivated: {} // Could open a sub-page
         }
@@ -74,7 +74,7 @@ Item {
         SettingsTile {
             iconText: "▦"
             cardTitle: "Apps"
-            subcardTitle: "Manage installed apps"
+            subtitle: "Manage installed apps"
             accentColor: Theme.accentPurple
             onActivated: root.goTo("apps")
         }
@@ -83,7 +83,7 @@ Item {
         SettingsTile {
             iconText: "🌐"
             cardTitle: "Language"
-            subcardTitle: "English"
+            subtitle: "English"
             accentColor: Theme.accentSoft
             onActivated: {} // TODO: language picker
         }
@@ -101,7 +101,7 @@ Item {
         SettingsTile {
             iconText: "ⓘ"
             cardTitle: "About"
-            subcardTitle: "ZAIos " + zaiosVersion
+            subtitle: "ZAIos " + zaiosVersion
             accentColor: Theme.textSecondary
             onActivated: root.goTo("about")
         }
@@ -110,7 +110,7 @@ Item {
         SettingsTile {
             iconText: "↻"
             cardTitle: "Restart"
-            subcardTitle: "Reboot the device"
+            subtitle: "Reboot the device"
             accentColor: Theme.warning
             onActivated: Power.reboot()
         }
@@ -119,7 +119,7 @@ Item {
         SettingsTile {
             iconText: "⏻"
             cardTitle: "Power Off"
-            subcardTitle: "Shut down"
+            subtitle: "Shut down"
             accentColor: Theme.error
             onActivated: Power.powerOff()
         }
@@ -134,7 +134,7 @@ Item {
 
         property string iconText: ""
         property string cardTitle: ""
-        property string subcardTitle: ""
+        property string subtitle: ""
         property color  accentColor: Theme.accent
         signal activated()
 
