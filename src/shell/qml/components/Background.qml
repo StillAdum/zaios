@@ -42,21 +42,21 @@ Item {
             GradientStop { position: 0.5; color: Qt.rgba(156/255, 77/255, 1, 0.04) }
             GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0) }
         }
-        scale: breathAnim.scale
-        opacity: breathAnim.opacity
+        scale: breathAnim.breathScale
+        opacity: breathAnim.breathOpacity
         Behavior on scale { NumberAnimation { duration: 4000; easing.type: Easing.InOutSine } }
         Behavior on opacity { NumberAnimation { duration: 4000; easing.type: Easing.InOutSine } }
     }
 
     Item {
         id: breathAnim
-        property real scale: 1.0
-        property real opacity: 1.0
+        property real breathScale: 1.0
+        property real breathOpacity: 1.0
 
         SequentialAnimation {
             loops: Animation.Infinite
-            NumberAnimation { target: breathAnim; property: "scale"; to: 1.05; duration: 8000; easing.type: Easing.InOutSine }
-            NumberAnimation { target: breathAnim; property: "scale"; to: 1.0; duration: 8000; easing.type: Easing.InOutSine }
+            NumberAnimation { target: breathAnim; property: "breathScale"; to: 1.05; duration: 8000; easing.type: Easing.InOutSine }
+            NumberAnimation { target: breathAnim; property: "breathScale"; to: 1.0; duration: 8000; easing.type: Easing.InOutSine }
         }
     }
 
