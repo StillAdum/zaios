@@ -132,6 +132,12 @@ int main(int argc, char **argv) {
     // Try loading from filesystem first (for live ISO), fall back to qrc
     QString qmlPath = "/usr/share/zaios/qml/main.qml";
     if (QFile::exists(qmlPath)) {
+        // Add QML import paths so components/pages can be found
+        engine.addImportPath("/usr/share/zaios/qml");
+        engine.addImportPath("/usr/share/zaios/qml/components");
+        engine.addImportPath("/usr/share/zaios/qml/pages");
+        engine.addImportPath("/usr/share/zaios/qml/styles");
+        engine.addImportPath("/usr/lib/qt6/qml");
         engine.load(QUrl::fromLocalFile(qmlPath));
     } else {
         engine.load(QUrl(QStringLiteral("qrc:/qt/qml/ZAIos/Shell/qml/main.qml")));
