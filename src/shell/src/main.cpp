@@ -129,7 +129,13 @@ int main(int argc, char **argv) {
     engine.rootContext()->setContextProperty("zaiosVersion", ZAIOS_SHELL_VERSION);
 
     // ── Load main QML ─────────────────────────────────────────────────────
-    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/ZAIos/Shell/qml/main.qml")));
+    // Try loading from filesystem first (for live ISO), fall back to qrc
+    QString qmlPath = "/usr/share/zaios/qml/main.qml";
+    if (QFile::exists(qmlPath)) {
+        engine.load(QUrl::fromLocalFile(qmlPath));
+    } else {
+        engine.load(QUrl(QStringLiteral("qrc:/qt/qml/ZAIos/Shell/qml/main.qml")));
+    }
 
     if (engine.rootObjects().isEmpty()) {
         qCritical() << "Failed to load ZAIos Shell QML";
