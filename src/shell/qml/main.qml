@@ -18,6 +18,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import ZAIos.Shell
+import "components"
+import "pages"
+import "styles"
 
 ApplicationWindow {
     id: root
