@@ -385,6 +385,14 @@ int main(int argc, char **argv) {
     /* Try Calamares first (straight to installer) */
     pid_t installer_pid = fork();
     if (installer_pid == 0) {
+        /* Redirect stderr to /dev/kmsg so Qt error messages appear
+         * on the serial console for debugging */
+        int kmsg_fd = open("/dev/kmsg", O_WRONLY);
+        if (kmsg_fd >= 0) {
+            dup2(kmsg_fd, STDERR_FILENO);
+            close(kmsg_fd);
+        }
+
         if (access("/usr/bin/calamares", X_OK) == 0) {
             ZAIOS_LOG(LOG_INFO, "launching Calamares installer");
             execlp("calamares", "calamares", "-d", NULL);
