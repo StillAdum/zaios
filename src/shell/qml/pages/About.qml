@@ -81,6 +81,8 @@ Item {
     }
 
     component InfoRow: Row {
+        property string label: ""
+        property string value: ""
         width: parent.width
         spacing: Theme.spaceM
 
