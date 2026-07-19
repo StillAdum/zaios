@@ -9,7 +9,6 @@
  * to a semi-transparent gradient.
  */
 import QtQuick
-import QtQuick.Effects
 
 QtObject {
     // Pre-baked gradient stops for a glass card top→bottom

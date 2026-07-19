@@ -14,7 +14,6 @@
  *   - On focus: brightens + adds cyan glow
  */
 import QtQuick
-import QtQuick.Effects
 import ZAIos.Shell
 
 Item {

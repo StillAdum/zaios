@@ -17,8 +17,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
-import QtQuick.Shapes
-import QtQuick.Effects
 import ZAIos.Shell
 
 ApplicationWindow {
