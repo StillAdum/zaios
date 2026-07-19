@@ -12,7 +12,6 @@
  * GridLayout, ListView) so that Up/Down/Left/Right work as expected.
  */
 import QtQuick
-import "../styles"
 import QtQuick.Controls
 import ZAIos.Shell
 import "../styles"

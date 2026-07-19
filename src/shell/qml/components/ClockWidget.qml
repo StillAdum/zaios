@@ -4,8 +4,8 @@
  * Uses the system timezone. Updates every second.
  */
 import QtQuick
-import "../styles"
 import ZAIos.Shell
+import "../styles"
 
 Item {
     width: 200

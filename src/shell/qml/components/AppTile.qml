@@ -13,7 +13,6 @@
  *   - On hover (cursor mode): tile picks up focus
  */
 import QtQuick
-import "../styles"
 import QtQuick.Controls
 import ZAIos.Shell
 import "../styles"

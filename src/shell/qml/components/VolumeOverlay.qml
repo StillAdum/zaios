@@ -5,8 +5,8 @@
  * Auto-hides after 1.5s (handled by main.qml's timer).
  */
 import QtQuick
-import "../styles"
 import ZAIos.Shell
+import "../styles"
 
 GlassCard {
     id: overlay

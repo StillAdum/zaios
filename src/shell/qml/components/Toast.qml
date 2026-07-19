@@ -5,8 +5,8 @@
  * Severity controls the accent color (info / warning / error / success).
  */
 import QtQuick
-import "../styles"
 import ZAIos.Shell
+import "../styles"
 
 GlassCard {
     id: toast

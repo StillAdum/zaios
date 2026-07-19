@@ -7,7 +7,6 @@
  * Emits searchSubmitted(text) on Enter or after 800ms of typing.
  */
 import QtQuick
-import "../styles"
 import QtQuick.Controls
 import ZAIos.Shell
 import "../styles"

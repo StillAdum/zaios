@@ -8,7 +8,6 @@
  * Clickable badges open the relevant settings page.
  */
 import QtQuick
-import "../styles"
 import QtQuick.Layouts
 import ZAIos.Shell
 import "../styles"

@@ -5,8 +5,8 @@
  * when not. Clicking opens the Network settings page.
  */
 import QtQuick
-import "../styles"
 import ZAIos.Shell
+import "../styles"
 
 Item {
     width: 110

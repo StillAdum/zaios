@@ -7,7 +7,6 @@
  * Each button is a big card with icon + label, D-pad navigable.
  */
 import QtQuick
-import "../styles"
 import QtQuick.Layouts
 import ZAIos.Shell
 import "../styles"
