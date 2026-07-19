@@ -1,20 +1,15 @@
-/*
- * Toast.qml — Single toast notification.
- *
- * Slides in from the top, fades out after duration set by NotificationManager.
- * Severity controls the accent color (info / warning / error / success).
- */
 import QtQuick
-import ZAIos.Shell
 import "../styles"
+import ZAIos.Shell
 
-GlassCard {
+Rectangle {
     id: toast
     width: 380
     height: 64
     radius: Theme.radiusM
-    glow: true
-    focusedOverride: true
+    color: Qt.rgba(0.1, 0.15, 0.3, 0.9)
+    border.color: Qt.rgba(255, 255, 255, 0.1)
+    border.width: 1
 
     property string title: ""
     property string body: ""
@@ -28,11 +23,9 @@ GlassCard {
         return Theme.accent;
     }
 
-    // ── Enter animation ──────────────────────────────────────────────────
     Component.onCompleted: {
         toast.x = -toast.width;
         enterAnim.start();
-        // Auto-dismiss after 4 seconds
         autoDismissTimer.start();
     }
 
@@ -54,6 +47,7 @@ GlassCard {
     function dismiss() {
         exitAnim.start();
     }
+
     SequentialAnimation {
         id: exitAnim
         NumberAnimation { target: toast; property: "opacity"; to: 0; duration: Theme.durationNormal }
@@ -66,7 +60,6 @@ GlassCard {
         anchors.margins: Theme.spaceM
         spacing: Theme.spaceM
 
-        // Severity icon
         Rectangle {
             width: 6
             height: parent.height
@@ -74,7 +67,6 @@ GlassCard {
             color: toast.accentColor
         }
 
-        // Content
         Column {
             width: parent.width - 18
             height: parent.height
