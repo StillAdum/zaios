@@ -6,6 +6,7 @@
  *
  * All UI components import these constants for consistency.
  */
+
 pragma Singleton
 import QtQuick
 

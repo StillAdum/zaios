@@ -5,6 +5,7 @@
  * Most TVs don't have a battery, so this hides itself if no battery found.
  */
 import QtQuick
+import "../styles"
 import ZAIos.Shell
 
 Item {

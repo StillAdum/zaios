@@ -10,17 +10,17 @@
  *   6. Hostname
  *   7. Timezone
  *   8. Complete
- *
  * D-pad navigates within each step; Back/Next buttons at the bottom.
  */
 import QtQuick
+import "../components"
+import "../styles"
 import QtQuick.Layouts
 import ZAIos.Shell
 
 Item {
     id: wizardRoot
     anchors.fill: parent
-
     // ── Header: progress dots ────────────────────────────────────────────
     Row {
         id: progressDots
@@ -28,7 +28,6 @@ Item {
         anchors.topMargin: 80
         anchors.horizontalCenter: parent.horizontalCenter
         spacing: Theme.spaceS
-
         Repeater {
             model: 8
             Rectangle {
@@ -36,22 +35,17 @@ Item {
                 radius: 6
                 color: index <= Settings.setupComplete ? Theme.accent : Qt.rgba(255,255,255,0.1)
                 opacity: index === 0 ? 1.0 : 0.6
-
                 Behavior on color { ColorAnimation { duration: Theme.durationNormal } }
                 Behavior on scale { NumberAnimation { duration: Theme.durationNormal } }
                 scale: index === 0 ? 1.2 : 1.0
             }
         }
     }
-
     // ── Title + description ──────────────────────────────────────────────
     Column {
         id: header
         anchors.top: progressDots.bottom
         anchors.topMargin: Theme.spaceXXL
-        anchors.horizontalCenter: parent.horizontalCenter
-        spacing: Theme.spaceS
-
         Text {
             text: "Welcome to ZAIos"
             color: Theme.accent
@@ -59,81 +53,47 @@ Item {
             font.weight: Font.Bold
             font.pixelSize: Theme.fontSizeXXXL
             anchors.horizontalCenter: parent.horizontalCenter
-
             NumberAnimation on opacity { from: 0; to: 1; duration: Theme.durationSlow }
             NumberAnimation on y { from: 30; to: 0; duration: Theme.durationSlow; easing.type: Theme.easingSpring }
-        }
-
-        Text {
             text: "Let's set up your TV OS in just a few steps."
             color: Theme.textSecondary
-            font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeL
-            anchors.horizontalCenter: parent.horizontalCenter
-
             NumberAnimation on opacity { from: 0; to: 1; duration: Theme.durationSlowest }
-        }
-    }
-
     // ── Main content area (changes per step) ─────────────────────────────
     GlassCard {
         id: contentCard
         anchors.top: header.bottom
-        anchors.topMargin: Theme.spaceXXL
-        anchors.horizontalCenter: parent.horizontalCenter
         width: 800
         height: 320
         radius: Theme.radiusXL
         glow: true
-
         // Welcome content
         Column {
             anchors.centerIn: parent
             spacing: Theme.spaceL
             visible: true
-
             Text {
                 text: "📺"
                 font.pixelSize: 100
                 anchors.horizontalCenter: parent.horizontalCenter
-            }
-            Text {
                 text: "ZAIos is a custom TV operating system."
                 color: Theme.textPrimary
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeL
-                anchors.horizontalCenter: parent.horizontalCenter
-            }
-            Text {
                 text: "You'll be watching, listening, and casting in minutes."
                 color: Theme.textSecondary
-                font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeM
-                anchors.horizontalCenter: parent.horizontalCenter
-            }
-        }
-    }
-
     // ── Bottom navigation buttons ────────────────────────────────────────
-    Row {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 80
-        anchors.horizontalCenter: parent.horizontalCenter
         spacing: Theme.spaceM
-
         FocusButton {
             text: "Skip Setup"
             width: 160; height: 56
             cornerRadius: Theme.radiusPill
             bgColor: Qt.rgba(255,255,255,0.05)
             onClicked: Settings.setupComplete = true
-        }
-        FocusButton {
             text: "Get Started  →"
             width: 220; height: 56
-            cornerRadius: Theme.radiusPill
             focus: true
-            onClicked: Settings.setupComplete = true
-        }
-    }
 }

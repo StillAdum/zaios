@@ -9,6 +9,7 @@
  * deep navy still reads as "premium dark".
  */
 import QtQuick
+import "../styles"
 import ZAIos.Shell
 
 Item {

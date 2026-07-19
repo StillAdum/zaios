@@ -5,6 +5,7 @@
  * when not. Clicking opens the Network settings page.
  */
 import QtQuick
+import "../styles"
 import ZAIos.Shell
 
 Item {
