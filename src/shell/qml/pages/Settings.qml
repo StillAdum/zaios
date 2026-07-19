@@ -132,8 +132,8 @@ Item {
         text: ""
         scaleOnFocus: 1.03
 
-        property string icon: ""
-        property string title: ""
+        property string iconText: ""
+        property string cardTitle: ""
         property string subtitle: ""
         property color  accentColor: Theme.accent
         signal activated()
@@ -153,7 +153,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: parent.parent.parent.icon
+                    text: parent.parent.parent.iconTextText
                     font.pixelSize: 32
                 }
             }
@@ -164,7 +164,7 @@ Item {
                 spacing: 4
 
                 Text {
-                    text: parent.parent.parent.title
+                    text: parent.parent.parent.cardTitle
                     color: parent.parent.activeFocus ? parent.parent.accentColor : Theme.textPrimary
                     font.family: Theme.fontFamily
                     font.weight: Font.Bold

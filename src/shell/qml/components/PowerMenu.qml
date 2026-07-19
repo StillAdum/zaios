@@ -93,7 +93,7 @@ Item {
     }
 
     component PowerButton: FocusButton {
-        property string icon: ""
+        property string iconText: ""
         property color  accentColor: Theme.accent
         cornerRadius: Theme.radiusL
         bgColor: Qt.rgba(0, 0, 0, 0.3)
@@ -105,7 +105,7 @@ Item {
             spacing: Theme.spaceS
 
             Text {
-                text: parent.parent.icon
+                text: parent.parent.iconTextText
                 font.pixelSize: 48
                 color: parent.parent.activeFocus ? parent.parent.accentColor : Theme.textPrimary
                 anchors.horizontalCenter: parent.horizontalCenter
