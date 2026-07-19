@@ -153,7 +153,7 @@ Item {
 
                 Text {
                     anchors.centerIn: parent
-                    text: parent.parent.parent.iconTextText
+                    text: parent.parent.parent.iconText
                     font.pixelSize: 32
                 }
             }

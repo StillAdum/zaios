@@ -105,7 +105,7 @@ Item {
             spacing: Theme.spaceS
 
             Text {
-                text: parent.parent.iconTextText
+                text: parent.parent.iconText
                 font.pixelSize: 48
                 color: parent.parent.activeFocus ? parent.parent.accentColor : Theme.textPrimary
                 anchors.horizontalCenter: parent.horizontalCenter
