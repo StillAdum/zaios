@@ -35,9 +35,9 @@ Item {
         width: parent.width * 1.2
         height: parent.height * 1.2
         radius: width / 2
-        gradient: RadialGradient {
-            centerX: 0.5; centerY: 0.5
-            centerRadius: 0.5
+        // Use simple linear gradient (RadialGradient needs QtQuick.Shapes)
+        gradient: Gradient {
+            orientation: Gradient.Vertical
             GradientStop { position: 0.0; color: Qt.rgba(0, 229/255, 1, 0.08) }
             GradientStop { position: 0.5; color: Qt.rgba(156/255, 77/255, 1, 0.04) }
             GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0) }
@@ -103,9 +103,9 @@ Item {
     // ── Subtle vignette ──────────────────────────────────────────────────
     Rectangle {
         anchors.fill: parent
-        gradient: RadialGradient {
-            centerX: 0.5; centerY: 0.5
-            centerRadius: 0.75
+        // Use simple linear gradient (RadialGradient needs QtQuick.Shapes)
+        gradient: Gradient {
+            orientation: Gradient.Vertical
             GradientStop { position: 0.0; color: Qt.rgba(0, 0, 0, 0) }
             GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.6) }
         }

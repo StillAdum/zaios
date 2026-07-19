@@ -17,13 +17,7 @@ Rectangle {
     border.color: Qt.rgba(255, 255, 255, 0.06)
     border.width: 1
 
-    // Subtle blur over content
-    layer.enabled: true
-    layer.effect: MultiEffect {
-        blurEnabled: true
-        blur: 0.5
-        blurMax: 32
-    }
+    // Note: MultiEffect blur removed (needs QtQuick.Effects, not in Qt 6.4)
 
     RowLayout {
         anchors.fill: parent
