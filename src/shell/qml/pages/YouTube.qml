@@ -166,7 +166,6 @@ Item {
             Column {
                 anchors.fill: parent
                 anchors.margins: Theme.spaceL
-                spacing: Theme.spaceS
 
                 Text {
                     text: YouTube.results.length > 0 ? "RESULTS" : "TRENDING"
@@ -186,7 +185,6 @@ Item {
                         model: YouTube.results
                         cellWidth: (width - Theme.spaceS) / 2
                         cellHeight: 160
-                        spacing: Theme.spaceS
 
                         delegate: FocusButton {
                             width: grid.cellWidth - 4
@@ -197,7 +195,6 @@ Item {
                             Row {
                                 anchors.fill: parent
                                 anchors.margins: Theme.spaceS
-                                spacing: Theme.spaceS
 
                                 // Thumbnail
                                 Rectangle {
