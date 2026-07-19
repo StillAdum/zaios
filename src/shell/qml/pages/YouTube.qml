@@ -60,7 +60,6 @@ Item {
                     font.family: Theme.fontFamily
                     font.pixelSize: Theme.fontSizeXS
                     font.weight: Font.Bold
-                    letterSpacing: 2
                     visible: YouTube.playing
                 }
 
@@ -175,7 +174,6 @@ Item {
                     font.family: Theme.fontFamily
                     font.weight: Font.Bold
                     font.pixelSize: Theme.fontSizeS
-                    letterSpacing: 2
                 }
 
                 ScrollView {

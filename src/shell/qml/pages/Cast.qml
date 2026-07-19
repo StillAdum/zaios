@@ -162,7 +162,6 @@ Item {
                 font.family: Theme.fontFamily
                 font.weight: Font.Bold
                 font.pixelSize: Theme.fontSizeS
-                letterSpacing: 2
             }
 
             ListView {
