@@ -51,8 +51,8 @@ Item {
                 PowerButton {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    icon: "⏻"
-                    label: "Power Off"
+                    iconText: "⏻"
+                    cardTitle: "Power Off"
                     accentColor: Theme.error
                     focus: true
                     onClicked: Power.powerOff()
@@ -60,24 +60,24 @@ Item {
                 PowerButton {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    icon: "↻"
-                    label: "Restart"
+                    iconText: "↻"
+                    cardTitle: "Restart"
                     accentColor: Theme.warning
                     onClicked: Power.reboot()
                 }
                 PowerButton {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    icon: "🌙"
-                    label: "Suspend"
+                    iconText: "🌙"
+                    cardTitle: "Suspend"
                     accentColor: Theme.accentSoft
                     onClicked: Power.suspend()
                 }
                 PowerButton {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    icon: "✕"
-                    label: "Cancel"
+                    iconText: "✕"
+                    cardTitle: "Cancel"
                     accentColor: Theme.textSecondary
                     onClicked: root.powerMenuVisible = false
                 }

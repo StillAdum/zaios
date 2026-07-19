@@ -45,8 +45,8 @@ Item {
 
         // ── Network ──────────────────────────────────────────────────────
         SettingsTile {
-            icon: "📶"
-            title: "Network"
+            iconText: "📶"
+            cardTitle: "Network"
             subtitle: Network.connected ? "Connected to " + Network.ssid : "Not connected"
             accentColor: Theme.accent
             onActivated: root.goTo("network")
@@ -54,8 +54,8 @@ Item {
 
         // ── Bluetooth ────────────────────────────────────────────────────
         SettingsTile {
-            icon: "🔵"
-            title: "Bluetooth"
+            iconText: "🔵"
+            cardTitle: "Bluetooth"
             subtitle: Bluetooth.powered ? "On" : "Off"
             accentColor: Theme.accent
             onActivated: root.goTo("bluetooth")
@@ -63,35 +63,35 @@ Item {
 
         // ── Display & Sound ──────────────────────────────────────────────
         SettingsTile {
-            icon: "📺"
-            title: "Display & Sound"
-            subtitle: "Volume: " + Settings.volume + "%"
+            iconText: "📺"
+            cardTitle: "Display & Sound"
+            subcardTitle: "Volume: " + Settings.volume + "%"
             accentColor: Theme.accentSoft
             onActivated: {} // Could open a sub-page
         }
 
         // ── Apps ─────────────────────────────────────────────────────────
         SettingsTile {
-            icon: "▦"
-            title: "Apps"
-            subtitle: "Manage installed apps"
+            iconText: "▦"
+            cardTitle: "Apps"
+            subcardTitle: "Manage installed apps"
             accentColor: Theme.accentPurple
             onActivated: root.goTo("apps")
         }
 
         // ── Language ─────────────────────────────────────────────────────
         SettingsTile {
-            icon: "🌐"
-            title: "Language"
-            subtitle: "English"
+            iconText: "🌐"
+            cardTitle: "Language"
+            subcardTitle: "English"
             accentColor: Theme.accentSoft
             onActivated: {} // TODO: language picker
         }
 
         // ── Hostname ─────────────────────────────────────────────────────
         SettingsTile {
-            icon: "🏷"
-            title: "Device Name"
+            iconText: "🏷"
+            cardTitle: "Device Name"
             subtitle: Settings.hostname
             accentColor: Theme.accent
             onActivated: {} // TODO: hostname editor
@@ -99,27 +99,27 @@ Item {
 
         // ── About ────────────────────────────────────────────────────────
         SettingsTile {
-            icon: "ⓘ"
-            title: "About"
-            subtitle: "ZAIos " + zaiosVersion
+            iconText: "ⓘ"
+            cardTitle: "About"
+            subcardTitle: "ZAIos " + zaiosVersion
             accentColor: Theme.textSecondary
             onActivated: root.goTo("about")
         }
 
         // ── Reboot ───────────────────────────────────────────────────────
         SettingsTile {
-            icon: "↻"
-            title: "Restart"
-            subtitle: "Reboot the device"
+            iconText: "↻"
+            cardTitle: "Restart"
+            subcardTitle: "Reboot the device"
             accentColor: Theme.warning
             onActivated: Power.reboot()
         }
 
         // ── Power Off ────────────────────────────────────────────────────
         SettingsTile {
-            icon: "⏻"
-            title: "Power Off"
-            subtitle: "Shut down"
+            iconText: "⏻"
+            cardTitle: "Power Off"
+            subcardTitle: "Shut down"
             accentColor: Theme.error
             onActivated: Power.powerOff()
         }
@@ -134,7 +134,7 @@ Item {
 
         property string iconText: ""
         property string cardTitle: ""
-        property string subtitle: ""
+        property string subcardTitle: ""
         property color  accentColor: Theme.accent
         signal activated()
 
