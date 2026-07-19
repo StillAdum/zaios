@@ -356,21 +356,31 @@ int main(int argc, char **argv) {
      * If neither works, drop to a shell. */
     ZAIOS_LOG(LOG_INFO, "starting Calamares installer on framebuffer");
 
-    /* Set up environment for framebuffer Qt apps */
-    setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb0", 1);
+    /* Set up environment for framebuffer Qt apps.
+     * Auto-detect which framebuffer device to use.
+     * VirtualBox has fb0=vkms and fb1=vboxvideo (primary).
+     * Real hardware usually has fb0 as the primary.
+     * Try /dev/fb0, /dev/fb1, /dev/fb2 in order. */
+    char fb_device[32] = "/dev/fb0";
+    for (int i = 0; i < 4; i++) {
+        char path[32];
+        snprintf(path, sizeof(path), "/dev/fb%d", i);
+        if (access(path, F_OK) == 0) {
+            /* Found a framebuffer device. Use the highest numbered one
+             * (usually the real GPU, not vkms fallback). */
+            snprintf(fb_device, sizeof(fb_device), "/dev/fb%d", i);
+            ZAIOS_LOG(LOG_INFO, "found framebuffer: %s", fb_device);
+        }
+    }
+
+    char qt_platform[128];
+    snprintf(qt_platform, sizeof(qt_platform), "linuxfb:fb=%s", fb_device);
+    setenv("QT_QPA_PLATFORM", qt_platform, 1);
+    ZAIOS_LOG(LOG_INFO, "QT_QPA_PLATFORM=%s", qt_platform);
+
     setenv("QT_QPA_FONTDIR", "/usr/share/fonts", 1);
     setenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/usr/lib/x86_64-linux-gnu/qt6/plugins", 1);
     setenv("QT_QPA_GENERIC_PLUGINS", "evdevkeyboard,evdevmouse,evdevtouch", 1);
-
-    /* Check if /dev/fb0 exists */
-    if (access("/dev/fb0", F_OK) != 0) {
-        ZAIOS_LOG(LOG_WARNING, "/dev/fb0 not found — trying /dev/fb/0");
-        if (access("/dev/fb/0", F_OK) == 0) {
-            setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb/0", 1);
-        } else {
-            ZAIOS_LOG(LOG_WARNING, "No framebuffer device found!");
-        }
-    }
 
     /* Try Calamares first (straight to installer) */
     pid_t installer_pid = fork();
@@ -409,8 +419,17 @@ int main(int argc, char **argv) {
             sleep(3);
             cage_pid = fork();
             if (cage_pid == 0) {
-                /* Same framebuffer approach as initial launch */
-                setenv("QT_QPA_PLATFORM", "linuxfb:fb=/dev/fb0", 1);
+                /* Same framebuffer auto-detect as initial launch */
+                char fb_dev[32] = "/dev/fb0";
+                for (int i = 0; i < 4; i++) {
+                    char p[32];
+                    snprintf(p, sizeof(p), "/dev/fb%d", i);
+                    if (access(p, F_OK) == 0)
+                        snprintf(fb_dev, sizeof(fb_dev), "/dev/fb%d", i);
+                }
+                char qt_plat[128];
+                snprintf(qt_plat, sizeof(qt_plat), "linuxfb:fb=%s", fb_dev);
+                setenv("QT_QPA_PLATFORM", qt_plat, 1);
                 setenv("QT_QPA_FONTDIR", "/usr/share/fonts", 1);
                 setenv("QT_QPA_PLATFORM_PLUGIN_PATH", "/usr/lib/x86_64-linux-gnu/qt6/plugins", 1);
                 setenv("QT_QPA_GENERIC_PLUGINS", "evdevkeyboard,evdevmouse,evdevtouch", 1);
@@ -421,7 +440,7 @@ int main(int argc, char **argv) {
                     execlp("calamares", "calamares", "-d", NULL);
                 }
                 if (access("/usr/bin/zaios-shell", X_OK) == 0) {
-                    ZAIOS_LOG(LOG_INFO, "relaunching zaios-shell on framebuffer");
+                    ZAIOS_LOG(LOG_INFO, "relaunching zaios-shell on framebuffer (%s)", fb_dev);
                     execlp("/usr/bin/zaios-shell", "zaios-shell", NULL);
                 }
                 ZAIOS_LOG(LOG_WARNING, "No GUI app found — dropping to shell");
