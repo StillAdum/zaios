@@ -35,6 +35,10 @@ public:
 
     Q_INVOKABLE void refresh();
 
+    // Battery detection — returns -1 if no battery present
+    Q_INVOKABLE int batteryCapacity() const;
+    Q_INVOKABLE bool batteryCharging() const;
+
 signals:
     void systemInfoChanged();
 

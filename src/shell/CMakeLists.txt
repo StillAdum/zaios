@@ -102,7 +102,7 @@ qt_add_qml_module(zaios_shell_qml
         qml/pages/YouTube.qml
         qml/pages/Browser.qml
         qml/pages/Cast.qml
-        qml/pages/Settings.qml
+        qml/pages/SettingsPage.qml
         qml/pages/Network.qml
         qml/pages/Bluetooth.qml
         qml/pages/About.qml

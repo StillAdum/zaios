@@ -20,7 +20,7 @@ static const QString BLUEZ_MANAGER_PATH = "/";
 
 BluetoothManager::BluetoothManager(QObject *parent)
     : QObject(parent), m_managerIface(nullptr), m_adapterIface(nullptr),
-      m_powered(false), m_scanning(false)
+      m_powered(false), m_scanning(false), m_findRetryCount(0)
 {
     QDBusConnection bus = QDBusConnection::systemBus();
 
@@ -47,16 +47,26 @@ void BluetoothManager::findAdapter() {
     // GetManagedObjects returns a{oa{sa{sv}}} directly (NOT a variant)
     QDBusMessage reply = m_managerIface->call("GetManagedObjects");
     if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
-        qWarning() << "Bluetooth: GetManagedObjects failed:" << reply.errorMessage();
-        QTimer::singleShot(5000, this, [this]() { findAdapter(); });
+        // Exponential backoff: 5s, 10s, 20s, 30s (cap)
+        int next = qMin(30, 5 * (1 << m_findRetryCount));
+        if (m_findRetryCount < 6) {
+            qWarning() << "Bluetooth: GetManagedObjects failed, retry " << m_findRetryCount << "in" << next << "s";
+            m_findRetryCount++;
+            QTimer::singleShot(next * 1000, this, [this]() { findAdapter(); });
+        } else {
+            // Give up — most VMs and many TVs have no BT adapter
+            qDebug() << "Bluetooth: giving up after" << m_findRetryCount << "retries (no adapter or bluetoothd not running)";
+        }
         return;
     }
+    m_findRetryCount = 0;
 
     // Find first object that implements org.bluez.Adapter1
     QVariantMap objects = parseManagedObjects(reply.arguments().at(0));
     if (objects.isEmpty()) {
-        qWarning() << "Bluetooth: no managed objects returned, retrying in 5s";
-        QTimer::singleShot(5000, this, [this]() { findAdapter(); });
+        // No managed objects — bluez is running but has no adapter
+        // Don't keep retrying; only re-check when bluez emits InterfacesAdded
+        qDebug() << "Bluetooth: bluez running but no managed objects (no adapter present)";
         return;
     }
 
@@ -78,8 +88,8 @@ void BluetoothManager::findAdapter() {
             return;
         }
     }
-    qWarning() << "Bluetooth: no adapter found, retrying in 5s";
-    QTimer::singleShot(5000, this, [this]() { findAdapter(); });
+    // BlueZ is running, no error, but no adapter — stop retrying
+    qDebug() << "Bluetooth: bluez running but no adapter present (this is normal for VMs)";
 }
 
 void BluetoothManager::refreshDevices() {

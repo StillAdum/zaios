@@ -93,3 +93,26 @@ int SystemService::diskTotal() const {
 }
 
 void SystemService::refresh() { /* properties re-evaluate on each access */ }
+
+int SystemService::batteryCapacity() const {
+    // Try BAT0..BAT3 — most laptops use BAT0, some use BAT1
+    for (int i = 0; i < 4; ++i) {
+        QFile f(QString("/sys/class/power_supply/BAT%1/capacity").arg(i));
+        if (f.open(QIODevice::ReadOnly)) {
+            bool ok = false;
+            int cap = QString::fromUtf8(f.readAll()).trimmed().toInt(&ok);
+            if (ok) return cap;
+        }
+    }
+    return -1;
+}
+
+bool SystemService::batteryCharging() const {
+    for (int i = 0; i < 4; ++i) {
+        QFile f(QString("/sys/class/power_supply/BAT%1/status").arg(i));
+        if (f.open(QIODevice::ReadOnly)) {
+            return QString::fromUtf8(f.readAll()).trimmed().compare("Charging", Qt::CaseInsensitive) == 0;
+        }
+    }
+    return false;
+}

@@ -91,7 +91,7 @@ ApplicationWindow {
     Component { id: youtubePage; YouTube {} }
     Component { id: browserPage; Browser {} }
     Component { id: castPage;    Cast {} }
-    Component { id: settingsPage; Settings {} }
+    Component { id: settingsPage; SettingsPage {} }
     Component { id: networkPage; Network {} }
     Component { id: bluetoothPage; Bluetooth {} }
     Component { id: aboutPage;   About {} }

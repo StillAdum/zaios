@@ -62,6 +62,7 @@ private:
     QString  m_adapterPath;
     bool     m_powered;
     bool     m_scanning;
+    int      m_findRetryCount;
     QVariantList m_devices;
 };
 
