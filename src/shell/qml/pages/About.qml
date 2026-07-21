@@ -21,7 +21,7 @@ Item {
 
         // Logo
         Image {
-            source: "qrc:/icons/zaios-logo.svg"
+            source: "file:///usr/share/zaios/icons/zaios-logo.svg"
             sourceSize.width: 120
             sourceSize.height: 120
             anchors.horizontalCenter: parent.horizontalCenter

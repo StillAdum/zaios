@@ -18,24 +18,28 @@ Item {
     property bool charging: false
 
     function refresh() {
-        var req = new XMLHttpRequest();
-        req.open("GET", "file:///sys/class/power_supply/BAT0/capacity", true);
-        req.onreadystatechange = function() {
-            if (req.readyState === 4 && req.status === 0 && req.responseText.length > 0) {
-                hasBattery = true;
-                capacity = parseInt(req.responseText.trim());
-            }
-        };
-        req.send();
+        // Use Qt.readFile() instead of XMLHttpRequest (XHR is disabled by
+        // default for file:// reads in Qt6, which caused "Set
+        // QML_XHR_ALLOW_FILE_READ to 1" warnings on boot).
+        var capFile = "/sys/class/power_supply/BAT0/capacity";
+        var statFile = "/sys/class/power_supply/BAT0/status";
 
-        var st = new XMLHttpRequest();
-        st.open("GET", "file:///sys/class/power_supply/BAT0/status", true);
-        st.onreadystatechange = function() {
-            if (st.readyState === 4) {
-                charging = (st.responseText.trim() === "Charging");
+        // Find first available battery (BAT0, BAT1, BAT2, ...)
+        var found = false;
+        for (var i = 0; i < 4 && !found; i++) {
+            var capPath = "/sys/class/power_supply/BAT" + i + "/capacity";
+            var cap = Qt.readFile(capPath);
+            if (cap.length > 0) {
+                hasBattery = true;
+                capacity = parseInt(cap.trim());
+                if (isNaN(capacity)) capacity = 0;
+                found = true;
+                var statPath = "/sys/class/power_supply/BAT" + i + "/status";
+                var stat = Qt.readFile(statPath);
+                charging = (stat.trim() === "Charging");
             }
-        };
-        st.send();
+        }
+        if (!found) hasBattery = false;
     }
 
     Component.onCompleted: refresh()

@@ -44,17 +44,21 @@ BluetoothManager::BluetoothManager(QObject *parent)
 
 void BluetoothManager::findAdapter() {
     QDBusConnection bus = QDBusConnection::systemBus();
-    QDBusReply<QDBusVariant> reply = m_managerIface->call("GetManagedObjects");
-    if (!reply.isValid()) {
-        qWarning() << "Bluetooth: GetManagedObjects failed:" << reply.error();
-        QTimer::singleShot(3000, this, [this]() { findAdapter(); });
+    // GetManagedObjects returns a{oa{sa{sv}}} directly (NOT a variant)
+    QDBusMessage reply = m_managerIface->call("GetManagedObjects");
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        qWarning() << "Bluetooth: GetManagedObjects failed:" << reply.errorMessage();
+        QTimer::singleShot(5000, this, [this]() { findAdapter(); });
         return;
     }
 
     // Find first object that implements org.bluez.Adapter1
-    QDBusArgument arg = qvariant_cast<QDBusArgument>(reply.value().variant());
-    QVariantMap objects;
-    arg >> objects;
+    QVariantMap objects = parseManagedObjects(reply.arguments().at(0));
+    if (objects.isEmpty()) {
+        qWarning() << "Bluetooth: no managed objects returned, retrying in 5s";
+        QTimer::singleShot(5000, this, [this]() { findAdapter(); });
+        return;
+    }
 
     for (const QString &path : objects.keys()) {
         QVariantMap ifaces = objects[path].toMap();
@@ -80,12 +84,10 @@ void BluetoothManager::findAdapter() {
 
 void BluetoothManager::refreshDevices() {
     if (!m_adapterIface) return;
-    QDBusReply<QDBusVariant> reply = m_managerIface->call("GetManagedObjects");
-    if (!reply.isValid()) return;
+    QDBusMessage reply = m_managerIface->call("GetManagedObjects");
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) return;
 
-    QDBusArgument arg = qvariant_cast<QDBusArgument>(reply.value().variant());
-    QVariantMap objects;
-    arg >> objects;
+    QVariantMap objects = parseManagedObjects(reply.arguments().at(0));
 
     QVariantList newList;
     for (const QString &path : objects.keys()) {
@@ -204,4 +206,33 @@ void BluetoothManager::trust(const QString &devicePath) {
                             QDBusConnection::systemBus(), this);
     devIface.setProperty("Trusted", true);
     refreshDevices();
+}
+
+// static
+QVariantMap BluetoothManager::parseManagedObjects(const QVariant &argVar) {
+    // GetManagedObjects returns a{oa{sa{sv}}}
+    // Each key is an object path (string), each value is a{sa{sv}} (QVariantMap of QVariantMap)
+    QVariantMap result;
+    const QDBusArgument *arg = nullptr;
+    QDBusArgument localArg;
+
+    if (argVar.canConvert<QDBusArgument>()) {
+        localArg = argVar.value<QDBusArgument>();
+        arg = &localArg;
+    } else {
+        return result;
+    }
+
+    arg->beginMap();
+    while (!arg->atEnd()) {
+        QString path;
+        QVariantMap ifaces;
+        arg->beginMapEntry();
+        *arg >> path;
+        *arg >> ifaces;
+        arg->endMapEntry();
+        result[path] = ifaces;
+    }
+    arg->endMap();
+    return result;
 }

@@ -44,7 +44,7 @@ void NetworkManager::onConnected() {
 
 void NetworkManager::sendCommand(const QString &cmd) {
     if (m_sock->state() != QLocalSocket::ConnectedState) {
-        qWarning() << "Network: not connected, dropping command:" << cmd;
+        // Silent — too noisy to log every poll. The reconnect logic in onDisconnected handles retries.
         return;
     }
     m_sock->write((cmd + "\n").toUtf8());

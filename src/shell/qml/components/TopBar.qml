@@ -32,7 +32,7 @@ Rectangle {
             Layout.alignment: Qt.AlignLeft
 
             Image {
-                source: "qrc:/icons/zaios-logo.svg"
+                source: "file:///usr/share/zaios/icons/zaios-logo.svg"
                 sourceSize.width: 28
                 sourceSize.height: 28
                 Layout.preferredWidth: 28

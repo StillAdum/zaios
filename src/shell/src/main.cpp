@@ -25,6 +25,7 @@
 #include <QFontDatabase>
 #include <QIcon>
 #include <QUrl>
+#include <QDir>
 
 #include "InputBridge.h"
 #include "NetworkManager.h"
@@ -70,10 +71,15 @@ int main(int argc, char **argv) {
     // override almost everything with our glassmorphism theme.
     QQuickStyle::setStyle("Material");
 
-    // Load custom fonts
-    QFontDatabase::addApplicationFont(":/fonts/Inter-Regular.ttf");
-    QFontDatabase::addApplicationFont(":/fonts/Inter-Medium.ttf");
-    QFontDatabase::addApplicationFont(":/fonts/Inter-Bold.ttf");
+    // Load custom fonts if shipped in /usr/share/zaios/fonts/
+    // (otherwise rely on fontconfig to pick a sensible default like DejaVu Sans)
+    QDir fontDir("/usr/share/zaios/fonts");
+    if (fontDir.exists()) {
+        const QStringList fontFiles = fontDir.entryList(QStringList() << "*.ttf" << "*.otf");
+        for (const QString &f : fontFiles) {
+            QFontDatabase::addApplicationFont(fontDir.absoluteFilePath(f));
+        }
+    }
 
     // ── Register C++ managers as QML types ────────────────────────────────
     qmlRegisterType<InputBridge>("ZAIos.Shell", 1, 0, "InputBridge");

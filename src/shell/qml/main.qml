@@ -172,7 +172,7 @@ ApplicationWindow {
     // ── Custom cursor (for air-mouse mode) ───────────────────────────────
     Image {
         id: customCursor
-        source: "qrc:/icons/cursor.svg"
+        source: "file:///usr/share/zaios/icons/cursor.svg"
         width: 32; height: 32
         x: Input.cursorX - 16
         y: Input.cursorY - 16

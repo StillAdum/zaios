@@ -448,6 +448,14 @@ build_shell() {
         # Qt QML files from shell source
         mkdir -p "$ROOTFS_DIR/usr/share/zaios/qml"
         cp -a "$shell_src/qml"/* "$ROOTFS_DIR/usr/share/zaios/qml/" 2>/dev/null || true
+        # Resources (icons, fonts) — QML loads these from filesystem paths
+        mkdir -p "$ROOTFS_DIR/usr/share/zaios/icons"
+        cp -a "$shell_src/resources/icons"/* "$ROOTFS_DIR/usr/share/zaios/icons/" 2>/dev/null || true
+        # Fonts (used by Qt Quick Controls Material style + custom theme)
+        if [[ -d "$shell_src/resources/fonts" ]]; then
+            mkdir -p "$ROOTFS_DIR/usr/share/fonts/truetype/zaios"
+            cp -a "$shell_src/resources/fonts"/* "$ROOTFS_DIR/usr/share/fonts/truetype/zaios/" 2>/dev/null || true
+        fi
         # Copy system Qt6 runtime libraries into rootfs
         local qt_lib_dir=$(pkg-config --variable=libdir Qt6Core 2>/dev/null || echo "/usr/lib/x86_64-linux-gnu")
         local qt_qml_dir=$(pkg-config --variable=qml_install_dir Qt6Quick 2>/dev/null || echo "/usr/lib/qt6/qml")
@@ -562,6 +570,8 @@ stage_runtime_services_into_rootfs() {
         [NetworkManager]="/usr/sbin/NetworkManager"
         [udevadm]="/usr/bin/udevadm"
         [udevd]="/usr/lib/systemd/systemd-udevd"
+        [fc-cache]="/usr/bin/fc-cache"
+        [fc-list]="/usr/bin/fc-list"
     )
 
     for name in "${!BINARIES[@]}"; do
@@ -734,6 +744,24 @@ DBUSCONF
     # ── NetworkManager config + state dir ──────────────────────────────────
     mkdir -p "$ROOTFS_DIR/var/lib/NetworkManager" "$ROOTFS_DIR/etc/NetworkManager"
     [[ -d /etc/NetworkManager ]] && cp -a /etc/NetworkManager/* "$ROOTFS_DIR/etc/NetworkManager/" 2>/dev/null || true
+
+    # ── Fontconfig + fonts (QtQuick needs fonts.conf, else "Cannot load default config file") ──
+    log "Staging fontconfig + font data"
+    mkdir -p "$ROOTFS_DIR/etc/fonts" "$ROOTFS_DIR/usr/share/fonts"
+    if [[ -d /etc/fonts ]]; then
+        cp -a /etc/fonts/* "$ROOTFS_DIR/etc/fonts/" 2>/dev/null || true
+    fi
+    if [[ -d /usr/share/fonts ]]; then
+        cp -a /usr/share/fonts/* "$ROOTFS_DIR/usr/share/fonts/" 2>/dev/null || true
+    fi
+    # Build font cache (QtQuick relies on this to find fonts at runtime)
+    if command -v fc-cache >/dev/null 2>&1; then
+        chroot "$ROOTFS_DIR" /usr/bin/fc-cache -f /usr/share/fonts 2>/dev/null || \
+            fc-cache -f "$ROOTFS_DIR/usr/share/fonts" 2>/dev/null || true
+        ok "Font cache generated"
+    else
+        warn "fc-cache not found on host — QtQuick may not find fonts at runtime"
+    fi
 
     # ── Create writable runtime directories in rootfs ──────────────────────
     mkdir -p "$ROOTFS_DIR/var/lib/dbus" "$ROOTFS_DIR/var/run/dbus" \

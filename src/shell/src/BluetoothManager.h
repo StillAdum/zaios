@@ -56,6 +56,7 @@ private slots:
 private:
     void findAdapter();
     void refreshDevices();
+    static QVariantMap parseManagedObjects(const QVariant &argVar);
     QDBusInterface *m_managerIface;
     QDBusInterface *m_adapterIface;
     QString  m_adapterPath;
